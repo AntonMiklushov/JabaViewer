@@ -75,7 +75,6 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     ksp(libs.androidx.hilt.compiler)
     ksp(libs.hilt.compiler)
-    ksp(libs.moshi.kotlin.codegen)
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
