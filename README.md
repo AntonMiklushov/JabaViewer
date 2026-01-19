@@ -1,3 +1,5 @@
+this is pure vibecode
+
 # Jaba Viewer (Phone)
 
 Jaba Viewer is a phone-focused Android app that mirrors the Wear OS PDF library protocol and adds a richer browsing and reading experience for larger screens.
