@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.jabaviewer.core.isPdfValid
 import com.example.jabaviewer.data.crypto.CryptoEngine
 import com.example.jabaviewer.data.repository.DownloadRepository
 import com.example.jabaviewer.data.repository.LibraryRepository
@@ -145,19 +146,6 @@ class ItemDetailsViewModel @Inject constructor(
         if (!isPdfValid(decryptedFile)) {
             decryptedFile.delete()
             throw IllegalStateException("Wrong passphrase or corrupted file")
-        }
-    }
-
-    private fun isPdfValid(file: File): Boolean {
-        if (!file.exists()) return false
-        return try {
-            val header = ByteArray(5)
-            file.inputStream().use { input ->
-                val read = input.read(header)
-                read == 5 && String(header, Charsets.US_ASCII).startsWith("%PDF-")
-            }
-        } catch (_: Exception) {
-            false
         }
     }
 }

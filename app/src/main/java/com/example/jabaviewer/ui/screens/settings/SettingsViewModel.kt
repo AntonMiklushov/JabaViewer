@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import javax.inject.Inject
 
 data class SettingsUiState(
@@ -125,8 +126,10 @@ class SettingsViewModel @Inject constructor(
     }
 
     private fun validateSourceSettings(): String? {
-        if (_state.value.baseUrl.isBlank()) return "Base URL is required"
-        if (!_state.value.baseUrl.trim().startsWith("https://")) return "Base URL must start with https://"
+        val baseUrl = _state.value.baseUrl.trim()
+        if (baseUrl.isBlank()) return "Base URL is required"
+        val parsed = baseUrl.toHttpUrlOrNull() ?: return "Base URL is invalid"
+        if (parsed.scheme != "https") return "Base URL must use https"
         if (_state.value.catalogPath.isBlank()) return "Catalog path is required"
         return null
     }

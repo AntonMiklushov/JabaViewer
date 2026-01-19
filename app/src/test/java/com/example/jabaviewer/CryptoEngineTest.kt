@@ -66,6 +66,22 @@ class CryptoEngineTest {
     }
 
     @Test
+    fun parseContainer_rejectsExcessiveIterations() {
+        val container = buildContainer(ByteArray(16), iterations = 10_000_001)
+        assertThrows(IllegalArgumentException::class.java) {
+            engine.parseContainer(container)
+        }
+    }
+
+    @Test
+    fun parseContainer_rejectsTruncatedHeader() {
+        val truncated = "LIB1".toByteArray(StandardCharsets.US_ASCII) + ByteArray(3)
+        assertThrows(IllegalArgumentException::class.java) {
+            engine.parseContainer(truncated)
+        }
+    }
+
+    @Test
     fun decrypt_rejectsModifiedCiphertext() {
         val bytes = readFixture("fixtures/catalog_fixture.enc")
         val tampered = bytes.clone()
