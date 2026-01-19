@@ -2,6 +2,7 @@ package com.example.jabaviewer.ui.screens.details
 
 import android.content.ContentResolver
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -112,21 +113,25 @@ class ItemDetailsViewModel @Inject constructor(
                 }
                 _state.value = _state.value.copy(isSaving = false, message = "Decrypted PDF saved")
             } catch (error: AEADBadTagException) {
+                Log.e(TAG, "Failed to save decrypted file: bad tag", error)
                 _state.value = _state.value.copy(
                     isSaving = false,
                     errorMessage = "Wrong passphrase or corrupted file",
                 )
             } catch (error: IllegalStateException) {
+                Log.e(TAG, "Failed to save decrypted file: state", error)
                 _state.value = _state.value.copy(
                     isSaving = false,
                     errorMessage = error.message ?: "Failed to save decrypted file",
                 )
             } catch (error: IOException) {
+                Log.e(TAG, "Failed to save decrypted file: IO", error)
                 _state.value = _state.value.copy(
                     isSaving = false,
                     errorMessage = error.message ?: "Failed to save decrypted file",
                 )
             } catch (error: SecurityException) {
+                Log.e(TAG, "Failed to save decrypted file: security", error)
                 _state.value = _state.value.copy(
                     isSaving = false,
                     errorMessage = error.message ?: "Failed to save decrypted file",
@@ -181,5 +186,9 @@ class ItemDetailsViewModel @Inject constructor(
             decryptedFile.delete()
             error("Wrong passphrase or corrupted file")
         }
+    }
+
+    private companion object {
+        private const val TAG = "ItemDetailsViewModel"
     }
 }

@@ -19,6 +19,7 @@ object SystemTimeProvider : TimeProvider {
     override fun nowMs(): Long = System.currentTimeMillis()
 }
 
+@Suppress("TooManyFunctions")
 class ResumableDownloader @Inject constructor(
     private val okHttpClient: OkHttpClient,
     private val timeProvider: TimeProvider,
@@ -51,20 +52,24 @@ class ResumableDownloader @Inject constructor(
                 check(contentLength != 0L) { "Empty download body" }
                 val totalBytes = totalBytesFor(contentLength, downloadedBytes, validation.append)
                 downloadedBytes = prepareTempFile(tempFile, validation.append, downloadedBytes)
-                val totalRead = writeBodyToFile(
-                    inputStream = body.byteStream(),
-                    tempFile = tempFile,
-                    append = validation.append,
-                    startingBytes = downloadedBytes,
-                    totalBytes = totalBytes,
-                    onProgress = onProgress,
-                    isStopped = isStopped,
-                    lastProgressPersisted = lastProgressPersisted,
-                    lastProgressUpdate = lastProgressUpdate,
-                ).also { readState ->
-                    lastProgressPersisted = readState.lastProgressPersisted
-                    lastProgressUpdate = readState.lastProgressUpdate
-                }.totalRead
+                val progressState = writeBodyToFile(
+                    request = WriteRequest(
+                        inputStream = body.byteStream(),
+                        tempFile = tempFile,
+                        append = validation.append,
+                        startingBytes = downloadedBytes,
+                        totalBytes = totalBytes,
+                        onProgress = onProgress,
+                        isStopped = isStopped,
+                    ),
+                    tracker = ProgressTracker(
+                        lastProgressPersisted = lastProgressPersisted,
+                        lastProgressUpdate = lastProgressUpdate,
+                    ),
+                )
+                lastProgressPersisted = progressState.lastProgressPersisted
+                lastProgressUpdate = progressState.lastProgressUpdate
+                val totalRead = progressState.totalRead
                 validateDownloadSize(totalBytes, totalRead, tempFile)
                 return@withContext
             }
@@ -151,45 +156,33 @@ class ResumableDownloader @Inject constructor(
         }
     }
 
-    private data class ProgressState(
-        val totalRead: Long,
-        val lastProgressPersisted: Int,
-        val lastProgressUpdate: Long,
-    )
-
+    @Suppress("NestedBlockDepth")
     private suspend fun writeBodyToFile(
-        inputStream: java.io.InputStream,
-        tempFile: File,
-        append: Boolean,
-        startingBytes: Long,
-        totalBytes: Long,
-        onProgress: suspend (Int) -> Unit,
-        isStopped: () -> Boolean,
-        lastProgressPersisted: Int,
-        lastProgressUpdate: Long,
+        request: WriteRequest,
+        tracker: ProgressTracker,
     ): ProgressState {
-        var totalRead = startingBytes
-        var progressPersisted = lastProgressPersisted
-        var progressUpdate = lastProgressUpdate
-        inputStream.use { input ->
-            FileOutputStream(tempFile, append).use { output ->
+        var totalRead = request.startingBytes
+        var progressPersisted = tracker.lastProgressPersisted
+        var progressUpdate = tracker.lastProgressUpdate
+        request.inputStream.use { input ->
+            FileOutputStream(request.tempFile, request.append).use { output ->
                 val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                 var bytesRead: Int
                 while (input.read(buffer).also { bytesRead = it } >= 0) {
-                    if (isStopped()) {
+                    if (request.isStopped()) {
                         throw IOException("Download interrupted")
                     }
                     output.write(buffer, 0, bytesRead)
                     totalRead += bytesRead
-                    if (totalBytes > 0L) {
-                        val progress = ((totalRead / totalBytes.toDouble()) * 100)
+                    if (request.totalBytes > 0L) {
+                        val progress = ((totalRead / request.totalBytes.toDouble()) * 100)
                             .roundToInt()
                             .coerceIn(0, 100)
                         val now = timeProvider.nowMs()
                         if (shouldPersistProgress(progress, progressPersisted, progressUpdate, now)) {
                             progressUpdate = now
                             progressPersisted = progress
-                            onProgress(progress.coerceIn(0, 99))
+                            request.onProgress(progress.coerceIn(0, 99))
                         }
                     }
                 }
@@ -210,6 +203,27 @@ class ResumableDownloader @Inject constructor(
     private data class ResumeValidation(
         val append: Boolean,
         val shouldRetryFresh: Boolean,
+    )
+
+    private data class WriteRequest(
+        val inputStream: java.io.InputStream,
+        val tempFile: File,
+        val append: Boolean,
+        val startingBytes: Long,
+        val totalBytes: Long,
+        val onProgress: suspend (Int) -> Unit,
+        val isStopped: () -> Boolean,
+    )
+
+    private data class ProgressTracker(
+        val lastProgressPersisted: Int,
+        val lastProgressUpdate: Long,
+    )
+
+    private data class ProgressState(
+        val totalRead: Long,
+        val lastProgressPersisted: Int,
+        val lastProgressUpdate: Long,
     )
 
     companion object {

@@ -3,6 +3,7 @@
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.util.Log
 import com.example.jabaviewer.core.isPdfValid
 import com.example.jabaviewer.data.crypto.CryptoEngine
 import com.example.jabaviewer.data.local.entities.CatalogItemEntity
@@ -110,68 +111,77 @@ class ReaderViewModel @Inject constructor(
         }
         _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
         try {
-            val loaded = withContext(Dispatchers.IO) {
-                val item = checkNotNull(dependencies.libraryRepository.getCatalogItem(itemId)) {
-                    "Document not found"
-                }
-                val local = dependencies.libraryRepository.getLocalDocument(itemId)
-                val encryptedFile = local?.encryptedFilePath?.let { File(it) }
-                    ?: dependencies.storage.encryptedFileFor(item.objectKey)
-                check(encryptedFile.exists()) { "Document is not downloaded" }
-                val decryptedFile = dependencies.storage.decryptedFileFor(item.id)
-                if (!decryptedFile.exists()) {
-                    decryptToFile(encryptedFile, decryptedFile)
-                } else if (!isPdfValid(decryptedFile)) {
-                    decryptedFile.delete()
-                    decryptToFile(encryptedFile, decryptedFile)
-                }
-                decryptedFile.setLastModified(System.currentTimeMillis())
-                val evicted = dependencies.cacheManager.pruneCache(
-                    cacheLimitMb,
-                    protectedFiles = setOf(decryptedFile),
-                )
-                LoadedDocument(item, local, decryptedFile, evicted)
-            }
-
-            if (loaded.evictedItemIds.isNotEmpty()) {
-                dependencies.libraryRepository.clearDecryptedPaths(loaded.evictedItemIds)
-            }
-
-            val lastPage = (loaded.local?.lastPage ?: 0).coerceAtLeast(0)
-            _uiState.value = _uiState.value.copy(
-                title = loaded.item.title,
-                pageCount = PAGE_COUNT_UNKNOWN,
-                currentPage = lastPage,
-                isLoading = false,
-                decryptedFilePath = loaded.decryptedFile.absolutePath,
-            )
-            dependencies.libraryRepository.updateReadingState(
-                itemId = loaded.item.id,
-                decryptedCachePath = loaded.decryptedFile.absolutePath,
-                lastPage = lastPage,
-                lastOpenedAt = System.currentTimeMillis(),
-            )
+            val loaded = loadDocumentInternal()
+            applyLoadedDocument(loaded)
         } catch (error: AEADBadTagException) {
+            Log.e(TAG, "Failed to open document: bad tag", error)
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 errorMessage = "Wrong passphrase or corrupted file",
             )
         } catch (error: IllegalStateException) {
+            Log.e(TAG, "Failed to open document: state", error)
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 errorMessage = error.message ?: "Failed to open document",
             )
         } catch (error: java.io.IOException) {
+            Log.e(TAG, "Failed to open document: IO", error)
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 errorMessage = error.message ?: "Failed to open document",
             )
         } catch (error: SecurityException) {
+            Log.e(TAG, "Failed to open document: security", error)
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 errorMessage = error.message ?: "Failed to open document",
             )
         }
+    }
+
+    private suspend fun loadDocumentInternal(): LoadedDocument = withContext(Dispatchers.IO) {
+        val item = checkNotNull(dependencies.libraryRepository.getCatalogItem(itemId)) {
+            "Document not found"
+        }
+        val local = dependencies.libraryRepository.getLocalDocument(itemId)
+        val encryptedFile = local?.encryptedFilePath?.let { File(it) }
+            ?: dependencies.storage.encryptedFileFor(item.objectKey)
+        check(encryptedFile.exists()) { "Document is not downloaded" }
+        val decryptedFile = dependencies.storage.decryptedFileFor(item.id)
+        if (!decryptedFile.exists()) {
+            decryptToFile(encryptedFile, decryptedFile)
+        } else if (!isPdfValid(decryptedFile)) {
+            decryptedFile.delete()
+            decryptToFile(encryptedFile, decryptedFile)
+        }
+        decryptedFile.setLastModified(System.currentTimeMillis())
+        val evicted = dependencies.cacheManager.pruneCache(
+            cacheLimitMb,
+            protectedFiles = setOf(decryptedFile),
+        )
+        LoadedDocument(item, local, decryptedFile, evicted)
+    }
+
+    private suspend fun applyLoadedDocument(loaded: LoadedDocument) {
+        if (loaded.evictedItemIds.isNotEmpty()) {
+            dependencies.libraryRepository.clearDecryptedPaths(loaded.evictedItemIds)
+        }
+
+        val lastPage = (loaded.local?.lastPage ?: 0).coerceAtLeast(0)
+        _uiState.value = _uiState.value.copy(
+            title = loaded.item.title,
+            pageCount = PAGE_COUNT_UNKNOWN,
+            currentPage = lastPage,
+            isLoading = false,
+            decryptedFilePath = loaded.decryptedFile.absolutePath,
+        )
+        dependencies.libraryRepository.updateReadingState(
+            itemId = loaded.item.id,
+            decryptedCachePath = loaded.decryptedFile.absolutePath,
+            lastPage = lastPage,
+            lastOpenedAt = System.currentTimeMillis(),
+        )
     }
 
     private suspend fun decryptToFile(encryptedFile: File, decryptedFile: File) {
@@ -196,6 +206,7 @@ class ReaderViewModel @Inject constructor(
 
     private companion object {
         private const val PAGE_COUNT_UNKNOWN = 0
+        private const val TAG = "ReaderViewModel"
     }
 }
 

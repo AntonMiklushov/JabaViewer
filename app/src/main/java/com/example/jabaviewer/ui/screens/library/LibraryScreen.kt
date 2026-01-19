@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package com.example.jabaviewer.ui.screens.library
 
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -88,8 +90,7 @@ fun LibraryScreen(
                 .padding(padding)
                 .pullRefresh(refreshState)
         ) {
-            LibraryContent(
-                state = state,
+            val contentCallbacks = rememberLibraryContentCallbacks(
                 onOpenDetails = onOpenDetails,
                 onOpenReader = onOpenReader,
                 onDownload = viewModel::downloadItem,
@@ -98,6 +99,10 @@ fun LibraryScreen(
                 onToggleTag = viewModel::toggleTag,
                 onClearTags = viewModel::clearTags,
                 onSortChange = viewModel::updateSort,
+            )
+            LibraryContent(
+                state = state,
+                callbacks = contentCallbacks,
             )
 
             PullRefreshIndicator(
@@ -136,14 +141,7 @@ private fun LibraryTopBar(
 @Composable
 private fun LibraryContent(
     state: LibraryUiState,
-    onOpenDetails: (String) -> Unit,
-    onOpenReader: (String) -> Unit,
-    onDownload: (String) -> Unit,
-    onCancel: (String) -> Unit,
-    onSearch: (String) -> Unit,
-    onToggleTag: (String) -> Unit,
-    onClearTags: () -> Unit,
-    onSortChange: (SortOrder) -> Unit,
+    callbacks: LibraryContentCallbacks,
 ) {
     Column(
         modifier = Modifier
@@ -153,7 +151,7 @@ private fun LibraryContent(
     ) {
         OutlinedTextField(
             value = state.searchQuery,
-            onValueChange = onSearch,
+            onValueChange = callbacks.onSearch,
             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
             placeholder = { Text("Search titles or tags") },
             modifier = Modifier.fillMaxWidth(),
@@ -162,12 +160,12 @@ private fun LibraryContent(
         TagRow(
             tags = state.availableTags,
             selectedTags = state.selectedTags,
-            onToggle = onToggleTag,
-            onClear = onClearTags,
+            onToggle = callbacks.onToggleTag,
+            onClear = callbacks.onClearTags,
         )
         SortRow(
             sortOrder = state.sortOrder,
-            onSortChange = onSortChange,
+            onSortChange = callbacks.onSortChange,
         )
         state.errorMessage?.let { message ->
             Text(
@@ -180,17 +178,17 @@ private fun LibraryContent(
         when (state.layout) {
             LibraryLayout.LIST -> LibraryList(
                 items = state.items,
-                onItemClick = onOpenDetails,
-                onOpenReader = onOpenReader,
-                onDownload = onDownload,
-                onCancel = onCancel,
+                onItemClick = callbacks.onOpenDetails,
+                onOpenReader = callbacks.onOpenReader,
+                onDownload = callbacks.onDownload,
+                onCancel = callbacks.onCancel,
             )
             LibraryLayout.GRID -> LibraryGrid(
                 items = state.items,
-                onItemClick = onOpenDetails,
-                onOpenReader = onOpenReader,
-                onDownload = onDownload,
-                onCancel = onCancel,
+                onItemClick = callbacks.onOpenDetails,
+                onOpenReader = callbacks.onOpenReader,
+                onDownload = callbacks.onDownload,
+                onCancel = callbacks.onCancel,
             )
         }
         if (state.items.isEmpty() && !state.isRefreshing) {
@@ -201,6 +199,51 @@ private fun LibraryContent(
                 modifier = Modifier.padding(top = 12.dp),
             )
         }
+    }
+}
+
+private data class LibraryContentCallbacks(
+    val onOpenDetails: (String) -> Unit,
+    val onOpenReader: (String) -> Unit,
+    val onDownload: (String) -> Unit,
+    val onCancel: (String) -> Unit,
+    val onSearch: (String) -> Unit,
+    val onToggleTag: (String) -> Unit,
+    val onClearTags: () -> Unit,
+    val onSortChange: (SortOrder) -> Unit,
+)
+
+@Composable
+private fun rememberLibraryContentCallbacks(
+    onOpenDetails: (String) -> Unit,
+    onOpenReader: (String) -> Unit,
+    onDownload: (String) -> Unit,
+    onCancel: (String) -> Unit,
+    onSearch: (String) -> Unit,
+    onToggleTag: (String) -> Unit,
+    onClearTags: () -> Unit,
+    onSortChange: (SortOrder) -> Unit,
+): LibraryContentCallbacks {
+    return remember(
+        onOpenDetails,
+        onOpenReader,
+        onDownload,
+        onCancel,
+        onSearch,
+        onToggleTag,
+        onClearTags,
+        onSortChange,
+    ) {
+        LibraryContentCallbacks(
+            onOpenDetails = onOpenDetails,
+            onOpenReader = onOpenReader,
+            onDownload = onDownload,
+            onCancel = onCancel,
+            onSearch = onSearch,
+            onToggleTag = onToggleTag,
+            onClearTags = onClearTags,
+            onSortChange = onSortChange,
+        )
     }
 }
 

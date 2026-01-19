@@ -43,6 +43,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongMethod")
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
@@ -84,15 +85,19 @@ fun SettingsScreen(
                 onSave = viewModel::saveSettings,
             )
             ReaderSection(
-                state = state,
-                readerMenuExpanded = readerMenu,
-                orientationMenuExpanded = orientationMenu,
-                onReaderMenuChange = { readerMenu = it },
-                onOrientationMenuChange = { orientationMenu = it },
-                onReaderModeChange = viewModel::updateReaderMode,
-                onNightModeChange = viewModel::updateNightMode,
-                onKeepScreenOnChange = viewModel::updateKeepScreenOn,
-                onOrientationChange = viewModel::updateOrientationLock,
+                data = ReaderSectionData(
+                    state = state,
+                    readerMenuExpanded = readerMenu,
+                    orientationMenuExpanded = orientationMenu,
+                ),
+                callbacks = ReaderSectionCallbacks(
+                    onReaderMenuChange = { readerMenu = it },
+                    onOrientationMenuChange = { orientationMenu = it },
+                    onReaderModeChange = viewModel::updateReaderMode,
+                    onNightModeChange = viewModel::updateNightMode,
+                    onKeepScreenOnChange = viewModel::updateKeepScreenOn,
+                    onOrientationChange = viewModel::updateOrientationLock,
+                ),
             )
             CacheSection(
                 cacheLimit = cacheLimit,
@@ -101,10 +106,7 @@ fun SettingsScreen(
                 onClearCache = viewModel::clearDecryptedCache,
                 onClearDownloads = viewModel::clearAllDownloads,
             )
-            state.message?.let { message ->
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(text = message, color = MaterialTheme.colorScheme.tertiary)
-            }
+            SettingsMessage(message = state.message)
         }
     }
 }
@@ -144,15 +146,8 @@ private fun SourceSection(
 
 @Composable
 private fun ReaderSection(
-    state: SettingsUiState,
-    readerMenuExpanded: Boolean,
-    orientationMenuExpanded: Boolean,
-    onReaderMenuChange: (Boolean) -> Unit,
-    onOrientationMenuChange: (Boolean) -> Unit,
-    onReaderModeChange: (ReaderMode) -> Unit,
-    onNightModeChange: (Boolean) -> Unit,
-    onKeepScreenOnChange: (Boolean) -> Unit,
-    onOrientationChange: (OrientationLock) -> Unit,
+    data: ReaderSectionData,
+    callbacks: ReaderSectionCallbacks,
 ) {
     Text("Reader", style = MaterialTheme.typography.titleLarge)
     Row(
@@ -162,16 +157,16 @@ private fun ReaderSection(
     ) {
         Text("Reading mode", style = MaterialTheme.typography.bodyLarge)
         BoxWithMenu(
-            expanded = readerMenuExpanded,
-            onExpandedChange = onReaderMenuChange,
-            current = state.readerMode.name.lowercase(),
+            expanded = data.readerMenuExpanded,
+            onExpandedChange = callbacks.onReaderMenuChange,
+            current = data.state.readerMode.name.lowercase(),
         ) {
             ReaderMode.values().forEach { mode ->
                 DropdownMenuItem(
                     text = { Text(mode.name.lowercase()) },
                     onClick = {
-                        onReaderModeChange(mode)
-                        onReaderMenuChange(false)
+                        callbacks.onReaderModeChange(mode)
+                        callbacks.onReaderMenuChange(false)
                     }
                 )
             }
@@ -183,7 +178,7 @@ private fun ReaderSection(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("Night mode", style = MaterialTheme.typography.bodyLarge)
-        Switch(checked = state.nightMode, onCheckedChange = onNightModeChange)
+        Switch(checked = data.state.nightMode, onCheckedChange = callbacks.onNightModeChange)
     }
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -191,7 +186,7 @@ private fun ReaderSection(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("Keep screen on", style = MaterialTheme.typography.bodyLarge)
-        Switch(checked = state.keepScreenOn, onCheckedChange = onKeepScreenOnChange)
+        Switch(checked = data.state.keepScreenOn, onCheckedChange = callbacks.onKeepScreenOnChange)
     }
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -200,16 +195,16 @@ private fun ReaderSection(
     ) {
         Text("Orientation lock", style = MaterialTheme.typography.bodyLarge)
         BoxWithMenu(
-            expanded = orientationMenuExpanded,
-            onExpandedChange = onOrientationMenuChange,
-            current = state.orientationLock.name.lowercase(),
+            expanded = data.orientationMenuExpanded,
+            onExpandedChange = callbacks.onOrientationMenuChange,
+            current = data.state.orientationLock.name.lowercase(),
         ) {
             OrientationLock.values().forEach { lock ->
                 DropdownMenuItem(
                     text = { Text(lock.name.lowercase()) },
                     onClick = {
-                        onOrientationChange(lock)
-                        onOrientationMenuChange(false)
+                        callbacks.onOrientationChange(lock)
+                        callbacks.onOrientationMenuChange(false)
                     }
                 )
             }
@@ -246,6 +241,14 @@ private fun CacheSection(
 }
 
 @Composable
+private fun SettingsMessage(message: String?) {
+    message?.let { text ->
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(text = text, color = MaterialTheme.colorScheme.tertiary)
+    }
+}
+
+@Composable
 private fun BoxWithMenu(
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
@@ -264,3 +267,18 @@ private fun BoxWithMenu(
         }
     }
 }
+
+private data class ReaderSectionData(
+    val state: SettingsUiState,
+    val readerMenuExpanded: Boolean,
+    val orientationMenuExpanded: Boolean,
+)
+
+private data class ReaderSectionCallbacks(
+    val onReaderMenuChange: (Boolean) -> Unit,
+    val onOrientationMenuChange: (Boolean) -> Unit,
+    val onReaderModeChange: (ReaderMode) -> Unit,
+    val onNightModeChange: (Boolean) -> Unit,
+    val onKeepScreenOnChange: (Boolean) -> Unit,
+    val onOrientationChange: (OrientationLock) -> Unit,
+)

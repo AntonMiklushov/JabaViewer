@@ -51,6 +51,7 @@ import java.io.File
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongMethod")
 @Composable
 fun ReaderScreen(
     itemId: String,
@@ -70,18 +71,20 @@ fun ReaderScreen(
         state.decryptedFilePath?.let { PdfLoadKey(it, state.readerMode, state.nightMode) }
     }
 
-    LaunchedEffect(itemId) {
-        showJumpDialog = false
-    }
-
-    LaunchedEffect(loadKey) {
-        isPdfLoaded = false
-        pdfError = null
-    }
-
-    KeepScreenOnEffect(view = view, keepOn = state.keepScreenOn)
-    OrientationLockEffect(context = context, lock = state.orientationLock)
-    PdfViewRecycleEffect(pdfView = pdfViewRef)
+    ReaderScreenEffects(
+        itemId = itemId,
+        loadKey = loadKey,
+        view = view,
+        context = context,
+        keepScreenOn = state.keepScreenOn,
+        orientationLock = state.orientationLock,
+        pdfViewRef = pdfViewRef,
+        onResetJump = { showJumpDialog = false },
+        onResetLoadState = {
+            isPdfLoaded = false
+            pdfError = null
+        },
+    )
 
     Scaffold(
         topBar = {
@@ -104,13 +107,14 @@ fun ReaderScreen(
             }
         },
     ) { padding ->
-        ReaderContent(
-            padding = padding,
+        val contentModel = ReaderContentModel(
             state = state,
             loadKey = loadKey,
             isPdfLoaded = isPdfLoaded,
             pdfError = pdfError,
             lastLoadKey = lastLoadKey,
+        )
+        val callbacks = ReaderContentCallbacks(
             onPdfViewReady = { pdfViewRef = it },
             onUpdateLastKey = { lastLoadKey = it },
             onPdfLoaded = { isPdfLoaded = true },
@@ -119,6 +123,11 @@ fun ReaderScreen(
                 viewModel.updatePageCount(count)
                 viewModel.updateCurrentPage(page)
             },
+        )
+        ReaderContent(
+            padding = padding,
+            model = contentModel,
+            callbacks = callbacks,
         )
     }
 
@@ -133,6 +142,31 @@ fun ReaderScreen(
             }
         )
     }
+}
+
+@Composable
+private fun ReaderScreenEffects(
+    itemId: String,
+    loadKey: PdfLoadKey?,
+    view: android.view.View,
+    context: android.content.Context,
+    keepScreenOn: Boolean,
+    orientationLock: OrientationLock,
+    pdfViewRef: PDFView?,
+    onResetJump: () -> Unit,
+    onResetLoadState: () -> Unit,
+) {
+    LaunchedEffect(itemId) {
+        onResetJump()
+    }
+
+    LaunchedEffect(loadKey) {
+        onResetLoadState()
+    }
+
+    KeepScreenOnEffect(view = view, keepOn = keepScreenOn)
+    OrientationLockEffect(context = context, lock = orientationLock)
+    PdfViewRecycleEffect(pdfView = pdfViewRef)
 }
 
 @Composable
@@ -198,16 +232,8 @@ private fun ReaderTopBar(
 @Composable
 private fun ReaderContent(
     padding: PaddingValues,
-    state: ReaderUiState,
-    loadKey: PdfLoadKey?,
-    isPdfLoaded: Boolean,
-    pdfError: String?,
-    lastLoadKey: PdfLoadKey?,
-    onPdfViewReady: (PDFView) -> Unit,
-    onUpdateLastKey: (PdfLoadKey) -> Unit,
-    onPdfLoaded: () -> Unit,
-    onPdfError: (String) -> Unit,
-    onPageChange: (Int, Int) -> Unit,
+    model: ReaderContentModel,
+    callbacks: ReaderContentCallbacks,
 ) {
     Box(
         modifier = Modifier
@@ -216,30 +242,28 @@ private fun ReaderContent(
             .padding(padding)
     ) {
         when {
-            state.isLoading -> {
+            model.state.isLoading -> {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
-            state.errorMessage != null -> {
-                ErrorText(message = state.errorMessage ?: "Failed to open document")
+            model.state.errorMessage != null -> {
+                ErrorText(message = model.state.errorMessage ?: "Failed to open document")
             }
-            pdfError != null -> {
-                ErrorText(message = pdfError.ifBlank { "Failed to load document" })
+            model.pdfError != null -> {
+                ErrorText(message = model.pdfError.ifBlank { "Failed to load document" })
             }
-            loadKey == null -> {
+            model.loadKey == null -> {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
             else -> {
                 PdfViewContainer(
-                    loadKey = loadKey,
-                    currentPage = state.currentPage,
-                    lastLoadKey = lastLoadKey,
-                    onPdfViewReady = onPdfViewReady,
-                    onUpdateLastKey = onUpdateLastKey,
-                    onPdfLoaded = onPdfLoaded,
-                    onPdfError = onPdfError,
-                    onPageChange = onPageChange,
+                    config = PdfViewConfig(
+                        loadKey = model.loadKey,
+                        currentPage = model.state.currentPage,
+                        lastLoadKey = model.lastLoadKey,
+                    ),
+                    callbacks = callbacks,
                 )
-                if (!isPdfLoaded) {
+                if (!model.isPdfLoaded) {
                     LinearProgressIndicator(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -253,43 +277,39 @@ private fun ReaderContent(
 
 @Composable
 private fun PdfViewContainer(
-    loadKey: PdfLoadKey,
-    currentPage: Int,
-    lastLoadKey: PdfLoadKey?,
-    onPdfViewReady: (PDFView) -> Unit,
-    onUpdateLastKey: (PdfLoadKey) -> Unit,
-    onPdfLoaded: () -> Unit,
-    onPdfError: (String) -> Unit,
-    onPageChange: (Int, Int) -> Unit,
+    config: PdfViewConfig,
+    callbacks: ReaderContentCallbacks,
 ) {
     AndroidView(
         factory = { viewContext ->
-            PDFView(viewContext, null).also(onPdfViewReady)
+            PDFView(viewContext, null).also(callbacks.onPdfViewReady)
         },
         update = { pdfView ->
-            onPdfViewReady(pdfView)
-            if (loadKey == lastLoadKey) return@AndroidView
-            val file = File(loadKey.path)
+            callbacks.onPdfViewReady(pdfView)
+            if (config.loadKey == config.lastLoadKey) return@AndroidView
+            val file = File(config.loadKey.path)
             if (!file.exists()) {
-                onPdfError("Document file is missing")
+                callbacks.onPdfError("Document file is missing")
                 return@AndroidView
             }
             pdfView.recycle()
-            val singlePage = loadKey.readerMode == ReaderMode.SINGLE
+            val singlePage = config.loadKey.readerMode == ReaderMode.SINGLE
             pdfView.fromFile(file)
-                .defaultPage(currentPage)
+                .defaultPage(config.currentPage)
                 .enableSwipe(true)
                 .swipeHorizontal(singlePage)
                 .pageSnap(singlePage)
                 .pageFling(singlePage)
                 .autoSpacing(singlePage)
                 .enableDoubletap(true)
-                .nightMode(loadKey.nightMode)
-                .onPageChange { page, pageCount -> onPageChange(page, pageCount) }
+                .nightMode(config.loadKey.nightMode)
+                .onPageChange { page, pageCount ->
+                    callbacks.onPageChange(page, pageCount)
+                }
                 .onLoad { pageCount ->
-                    onPdfLoaded()
-                    onPageChange(currentPage.coerceAtLeast(0), pageCount)
-                    val initialPage = currentPage.coerceIn(
+                    callbacks.onPdfLoaded()
+                    callbacks.onPageChange(config.currentPage.coerceAtLeast(0), pageCount)
+                    val initialPage = config.currentPage.coerceIn(
                         0,
                         (pageCount - 1).coerceAtLeast(0),
                     )
@@ -298,10 +318,10 @@ private fun PdfViewContainer(
                     }
                 }
                 .onError { error ->
-                    onPdfError(error.message ?: "Failed to load document")
+                    callbacks.onPdfError(error.message ?: "Failed to load document")
                 }
                 .load()
-            onUpdateLastKey(loadKey)
+            callbacks.onUpdateLastKey(config.loadKey)
         },
         modifier = Modifier.fillMaxSize(),
     )
@@ -387,6 +407,28 @@ private data class PdfLoadKey(
     val path: String,
     val readerMode: ReaderMode,
     val nightMode: Boolean,
+)
+
+private data class ReaderContentModel(
+    val state: ReaderUiState,
+    val loadKey: PdfLoadKey?,
+    val isPdfLoaded: Boolean,
+    val pdfError: String?,
+    val lastLoadKey: PdfLoadKey?,
+)
+
+private data class ReaderContentCallbacks(
+    val onPdfViewReady: (PDFView) -> Unit,
+    val onUpdateLastKey: (PdfLoadKey) -> Unit,
+    val onPdfLoaded: () -> Unit,
+    val onPdfError: (String) -> Unit,
+    val onPageChange: (Int, Int) -> Unit,
+)
+
+private data class PdfViewConfig(
+    val loadKey: PdfLoadKey,
+    val currentPage: Int,
+    val lastLoadKey: PdfLoadKey?,
 )
 
 private const val MAX_SLIDER_STEPS = 200

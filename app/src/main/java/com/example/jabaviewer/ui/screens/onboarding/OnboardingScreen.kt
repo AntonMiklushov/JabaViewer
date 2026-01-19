@@ -54,11 +54,13 @@ fun OnboardingScreen(
             OnboardingHeader()
             OnboardingCard(
                 state = state,
-                onBaseUrlChange = viewModel::updateBaseUrl,
-                onCatalogPathChange = viewModel::updateCatalogPath,
-                onPassphraseChange = viewModel::updatePassphrase,
-                onTestConnection = viewModel::testConnection,
-                onContinue = { viewModel.saveAndSync(onContinue) },
+                callbacks = OnboardingCallbacks(
+                    onBaseUrlChange = viewModel::updateBaseUrl,
+                    onCatalogPathChange = viewModel::updateCatalogPath,
+                    onPassphraseChange = viewModel::updatePassphrase,
+                    onTestConnection = viewModel::testConnection,
+                    onContinue = { viewModel.saveAndSync(onContinue) },
+                ),
             )
             OnboardingFooter()
         }
@@ -84,11 +86,7 @@ private fun OnboardingHeader() {
 @Composable
 private fun OnboardingCard(
     state: OnboardingUiState,
-    onBaseUrlChange: (String) -> Unit,
-    onCatalogPathChange: (String) -> Unit,
-    onPassphraseChange: (String) -> Unit,
-    onTestConnection: () -> Unit,
-    onContinue: () -> Unit,
+    callbacks: OnboardingCallbacks,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -97,21 +95,21 @@ private fun OnboardingCard(
         ) {
             OutlinedTextField(
                 value = state.baseUrl,
-                onValueChange = onBaseUrlChange,
+                onValueChange = callbacks.onBaseUrlChange,
                 label = { Text("Site base URL") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
             OutlinedTextField(
                 value = state.catalogPath,
-                onValueChange = onCatalogPathChange,
+                onValueChange = callbacks.onCatalogPathChange,
                 label = { Text("Catalog path") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
             OutlinedTextField(
                 value = state.passphrase,
-                onValueChange = onPassphraseChange,
+                onValueChange = callbacks.onPassphraseChange,
                 label = { Text("Passphrase") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
@@ -126,14 +124,14 @@ private fun OnboardingCard(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 OutlinedButton(
-                    onClick = onTestConnection,
+                    onClick = callbacks.onTestConnection,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !state.isLoading,
                 ) {
                     Text("Test connection")
                 }
                 Button(
-                    onClick = onContinue,
+                    onClick = callbacks.onContinue,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !state.isLoading,
                 ) {
@@ -143,6 +141,14 @@ private fun OnboardingCard(
         }
     }
 }
+
+private data class OnboardingCallbacks(
+    val onBaseUrlChange: (String) -> Unit,
+    val onCatalogPathChange: (String) -> Unit,
+    val onPassphraseChange: (String) -> Unit,
+    val onTestConnection: () -> Unit,
+    val onContinue: () -> Unit,
+)
 
 @Composable
 private fun OnboardingStatus(state: OnboardingUiState) {

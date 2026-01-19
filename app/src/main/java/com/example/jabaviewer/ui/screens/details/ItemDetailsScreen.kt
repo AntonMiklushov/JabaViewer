@@ -42,6 +42,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongMethod")
 @Composable
 fun ItemDetailsScreen(
     onBack: () -> Unit,
@@ -96,11 +97,13 @@ fun ItemDetailsScreen(
                     item = item,
                     isSaving = state.isSaving,
                     isRemoving = state.isRemoving,
-                    onOpenReader = onOpenReader,
-                    onSave = { createDocumentLauncher.launch(buildPdfFileName(item.title)) },
-                    onRemove = { viewModel.removeDownload(onBack) },
-                    onCancelDownload = viewModel::cancelDownload,
-                    onDownload = viewModel::download,
+                    callbacks = DetailsActionCallbacks(
+                        onOpenReader = onOpenReader,
+                        onSave = { createDocumentLauncher.launch(buildPdfFileName(item.title)) },
+                        onRemove = { viewModel.removeDownload(onBack) },
+                        onCancelDownload = viewModel::cancelDownload,
+                        onDownload = viewModel::download,
+                    ),
                 )
                 DetailsFooter(
                     errorMessage = state.errorMessage,
@@ -158,26 +161,22 @@ private fun DetailsActions(
     item: LibraryItem,
     isSaving: Boolean,
     isRemoving: Boolean,
-    onOpenReader: () -> Unit,
-    onSave: () -> Unit,
-    onRemove: () -> Unit,
-    onCancelDownload: () -> Unit,
-    onDownload: () -> Unit,
+    callbacks: DetailsActionCallbacks,
 ) {
     when (item.downloadState) {
         DownloadState.DOWNLOADED -> {
-            Button(onClick = onOpenReader, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = callbacks.onOpenReader, modifier = Modifier.fillMaxWidth()) {
                 Text("Open")
             }
             OutlinedButton(
-                onClick = onSave,
+                onClick = callbacks.onSave,
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isSaving,
             ) {
                 Text(if (isSaving) "Saving..." else "Decrypt save")
             }
             OutlinedButton(
-                onClick = onRemove,
+                onClick = callbacks.onRemove,
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isRemoving,
             ) {
@@ -191,14 +190,14 @@ private fun DetailsActions(
                 color = MaterialTheme.colorScheme.tertiary,
             )
             OutlinedButton(
-                onClick = onCancelDownload,
+                onClick = callbacks.onCancelDownload,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Cancel")
             }
         }
         else -> {
-            Button(onClick = onDownload, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = callbacks.onDownload, modifier = Modifier.fillMaxWidth()) {
                 Text("Download")
             }
         }
@@ -223,6 +222,14 @@ private fun DetailsFooter(
         Text(text = text, color = MaterialTheme.colorScheme.tertiary)
     }
 }
+
+private data class DetailsActionCallbacks(
+    val onOpenReader: () -> Unit,
+    val onSave: () -> Unit,
+    val onRemove: () -> Unit,
+    val onCancelDownload: () -> Unit,
+    val onDownload: () -> Unit,
+)
 
 private fun buildPdfFileName(title: String): String {
     val base = title.trim().ifBlank { "document" }
