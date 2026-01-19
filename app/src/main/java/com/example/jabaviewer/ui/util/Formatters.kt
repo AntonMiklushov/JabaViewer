@@ -2,21 +2,28 @@ package com.example.jabaviewer.ui.util
 
 import java.text.DateFormat
 import java.util.Date
+import java.util.Locale
 import kotlin.math.log10
 import kotlin.math.pow
 
 fun formatBytes(bytes: Long): String {
-    if (bytes <= 0L) return "0 B"
-    if (bytes < 1024L) return "$bytes B"
+    val value = bytes.coerceAtLeast(0L)
     val unit = 1024
-    val exp = (log10(bytes.toDouble()) / log10(unit.toDouble())).toInt()
-    val prefix = "KMGTPE"[exp - 1]
-    val value = bytes / unit.toDouble().pow(exp.toDouble())
-    return String.format("%.1f %sB", value, prefix)
+    return if (value < unit) {
+        "$value B"
+    } else {
+        val exp = (log10(value.toDouble()) / log10(unit.toDouble())).toInt()
+        val prefix = "KMGTPE"[exp - 1]
+        val scaled = value / unit.toDouble().pow(exp.toDouble())
+        String.format(Locale.US, "%.1f %sB", scaled, prefix)
+    }
 }
 
 fun formatDate(timestamp: Long?): String {
-    if (timestamp == null || timestamp <= 0L) return "Never opened"
-    val formatter = DateFormat.getDateInstance(DateFormat.MEDIUM)
-    return formatter.format(Date(timestamp))
+    return if (timestamp == null || timestamp <= 0L) {
+        "Never opened"
+    } else {
+        val formatter = DateFormat.getDateInstance(DateFormat.MEDIUM)
+        formatter.format(Date(timestamp))
+    }
 }

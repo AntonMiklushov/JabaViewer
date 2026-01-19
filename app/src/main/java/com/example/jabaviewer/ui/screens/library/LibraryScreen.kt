@@ -75,19 +75,10 @@ fun LibraryScreen(
 
     ScaffoldWithBackground(
         topBar = {
-            TopAppBar(
-                title = { Text("Library") },
-                actions = {
-                    IconButton(onClick = viewModel::toggleLayout) {
-                        Icon(
-                            imageVector = if (state.layout == LibraryLayout.LIST) Icons.Outlined.GridView else Icons.AutoMirrored.Outlined.List,
-                            contentDescription = "Toggle layout",
-                        )
-                    }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(imageVector = Icons.Outlined.Settings, contentDescription = "Settings")
-                    }
-                },
+            LibraryTopBar(
+                isList = state.layout == LibraryLayout.LIST,
+                onToggleLayout = viewModel::toggleLayout,
+                onOpenSettings = onOpenSettings,
             )
         },
     ) { padding ->
@@ -97,68 +88,116 @@ fun LibraryScreen(
                 .padding(padding)
                 .pullRefresh(refreshState)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                OutlinedTextField(
-                    value = state.searchQuery,
-                    onValueChange = viewModel::updateSearch,
-                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                    placeholder = { Text("Search titles or tags") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-                TagRow(
-                    tags = state.availableTags,
-                    selectedTags = state.selectedTags,
-                    onToggle = viewModel::toggleTag,
-                    onClear = viewModel::clearTags,
-                )
-                SortRow(
-                    sortOrder = state.sortOrder,
-                    onSortChange = viewModel::updateSort,
-                )
-                state.errorMessage?.let { message ->
-                    Text(
-                        text = message,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-
-                when (state.layout) {
-                    LibraryLayout.LIST -> LibraryList(
-                        items = state.items,
-                        onItemClick = onOpenDetails,
-                        onOpenReader = onOpenReader,
-                        onDownload = viewModel::downloadItem,
-                        onCancel = viewModel::cancelDownload,
-                    )
-                    LibraryLayout.GRID -> LibraryGrid(
-                        items = state.items,
-                        onItemClick = onOpenDetails,
-                        onOpenReader = onOpenReader,
-                        onDownload = viewModel::downloadItem,
-                        onCancel = viewModel::cancelDownload,
-                    )
-                }
-                if (state.items.isEmpty() && !state.isRefreshing) {
-                    Text(
-                        text = "No documents yet. Pull to refresh to load your catalog.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 12.dp),
-                    )
-                }
-            }
+            LibraryContent(
+                state = state,
+                onOpenDetails = onOpenDetails,
+                onOpenReader = onOpenReader,
+                onDownload = viewModel::downloadItem,
+                onCancel = viewModel::cancelDownload,
+                onSearch = viewModel::updateSearch,
+                onToggleTag = viewModel::toggleTag,
+                onClearTags = viewModel::clearTags,
+                onSortChange = viewModel::updateSort,
+            )
 
             PullRefreshIndicator(
                 refreshing = state.isRefreshing,
                 state = refreshState,
                 modifier = Modifier.align(Alignment.TopCenter),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LibraryTopBar(
+    isList: Boolean,
+    onToggleLayout: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    TopAppBar(
+        title = { Text("Library") },
+        actions = {
+            IconButton(onClick = onToggleLayout) {
+                val icon = if (isList) Icons.Outlined.GridView else Icons.AutoMirrored.Outlined.List
+                Icon(
+                    imageVector = icon,
+                    contentDescription = "Toggle layout",
+                )
+            }
+            IconButton(onClick = onOpenSettings) {
+                Icon(imageVector = Icons.Outlined.Settings, contentDescription = "Settings")
+            }
+        },
+    )
+}
+
+@Composable
+private fun LibraryContent(
+    state: LibraryUiState,
+    onOpenDetails: (String) -> Unit,
+    onOpenReader: (String) -> Unit,
+    onDownload: (String) -> Unit,
+    onCancel: (String) -> Unit,
+    onSearch: (String) -> Unit,
+    onToggleTag: (String) -> Unit,
+    onClearTags: () -> Unit,
+    onSortChange: (SortOrder) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        OutlinedTextField(
+            value = state.searchQuery,
+            onValueChange = onSearch,
+            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+            placeholder = { Text("Search titles or tags") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+        )
+        TagRow(
+            tags = state.availableTags,
+            selectedTags = state.selectedTags,
+            onToggle = onToggleTag,
+            onClear = onClearTags,
+        )
+        SortRow(
+            sortOrder = state.sortOrder,
+            onSortChange = onSortChange,
+        )
+        state.errorMessage?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        when (state.layout) {
+            LibraryLayout.LIST -> LibraryList(
+                items = state.items,
+                onItemClick = onOpenDetails,
+                onOpenReader = onOpenReader,
+                onDownload = onDownload,
+                onCancel = onCancel,
+            )
+            LibraryLayout.GRID -> LibraryGrid(
+                items = state.items,
+                onItemClick = onOpenDetails,
+                onOpenReader = onOpenReader,
+                onDownload = onDownload,
+                onCancel = onCancel,
+            )
+        }
+        if (state.items.isEmpty() && !state.isRefreshing) {
+            Text(
+                text = "No documents yet. Pull to refresh to load your catalog.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 12.dp),
             )
         }
     }
@@ -297,52 +336,74 @@ private fun LibraryItemCard(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item.tags.take(3).forEach { tag ->
-                    Text(
-                        text = tag,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
-                }
-            }
+            LibraryItemTags(tags = item.tags)
             Text(
                 text = "${formatBytes(item.size)} \u2022 ${formatDate(item.lastOpenedAt)}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            when (item.downloadState) {
-                DownloadState.DOWNLOADED -> {
-                    Button(onClick = onOpenReader, modifier = Modifier.fillMaxWidth()) {
-                        Text("Open")
-                    }
+            LibraryItemActions(
+                downloadState = item.downloadState,
+                progress = item.downloadProgress,
+                onOpenReader = onOpenReader,
+                onCancel = onCancel,
+                onDownload = onDownload,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LibraryItemTags(tags: List<String>) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        tags.take(3).forEach { tag ->
+            Text(
+                text = tag,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LibraryItemActions(
+    downloadState: DownloadState,
+    progress: Int,
+    onOpenReader: () -> Unit,
+    onCancel: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    when (downloadState) {
+        DownloadState.DOWNLOADED -> {
+            Button(onClick = onOpenReader, modifier = Modifier.fillMaxWidth()) {
+                Text("Open")
+            }
+        }
+        DownloadState.DOWNLOADING -> {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Downloading $progress%",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+                Button(onClick = onCancel) {
+                    Text("Cancel")
                 }
-                DownloadState.DOWNLOADING -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "Downloading ${item.downloadProgress}%",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.tertiary,
-                        )
-                        Button(onClick = onCancel) {
-                            Text("Cancel")
-                        }
-                    }
-                }
-                else -> {
-                    Button(onClick = onDownload, modifier = Modifier.fillMaxWidth()) {
-                        Text("Download")
-                    }
-                }
+            }
+        }
+        else -> {
+            Button(onClick = onDownload, modifier = Modifier.fillMaxWidth()) {
+                Text("Download")
             }
         }
     }

@@ -123,10 +123,13 @@ class OnboardingViewModel @Inject constructor(
     }
 
     private fun validateInputs(state: OnboardingUiState): String? {
-        if (state.baseUrl.isBlank()) return "Base URL is required"
-        if (!state.baseUrl.trim().startsWith("https://")) return "Base URL must start with https://"
-        if (state.catalogPath.isBlank()) return "Catalog path is required"
-        if (state.passphrase.isBlank()) return "Passphrase is required"
-        return null
+        val baseUrl = state.baseUrl.trim()
+        return when {
+            baseUrl.isBlank() -> "Base URL is required"
+            !baseUrl.startsWith("https://") -> "Base URL must start with https://"
+            state.catalogPath.isBlank() -> "Catalog path is required"
+            state.passphrase.isBlank() -> "Passphrase is required"
+            else -> null
+        }
     }
 }

@@ -92,8 +92,9 @@ class CryptoEngineTest {
     }
 
     private fun readFixture(path: String): ByteArray {
-        val stream = javaClass.classLoader?.getResourceAsStream(path)
-            ?: throw IllegalStateException("Missing fixture: $path")
+        val stream = checkNotNull(javaClass.classLoader?.getResourceAsStream(path)) {
+            "Missing fixture: $path"
+        }
         return stream.readBytes()
     }
 

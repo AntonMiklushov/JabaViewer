@@ -10,6 +10,7 @@ import com.example.jabaviewer.data.settings.SortOrder
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
+@Suppress("TooManyFunctions")
 class SettingsRepository @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val passphraseStore: PassphraseStore,

@@ -12,6 +12,7 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
+@Suppress("TooManyFunctions")
 class CryptoEngine {
     fun parseContainer(bytes: ByteArray): Lib1Container {
         val stream = bytes.inputStream()
@@ -42,31 +43,16 @@ class CryptoEngine {
 
     fun decryptToFile(containerFile: File, outputFile: File, passphrase: CharArray) {
         val tempFile = File(outputFile.parentFile, "${outputFile.name}.tmp")
+        var success = false
         try {
-            containerFile.inputStream().use { input ->
-                val header = parseHeader(input)
-                val cipher = createCipher(passphrase, header)
-                tempFile.parentFile?.mkdirs()
-                // Write to a temp file first to avoid leaving partial plaintext on failures.
-                java.io.FileOutputStream(tempFile).use { output ->
-                    CipherInputStream(input, cipher).use { cipherInput ->
-                        cipherInput.copyTo(output)
-                    }
-                    output.fd.sync()
-                }
-            }
-            if (outputFile.exists() && !outputFile.delete()) {
-                throw IllegalStateException("Failed to replace existing output")
-            }
-            if (!tempFile.renameTo(outputFile)) {
-                tempFile.copyTo(outputFile, overwrite = true)
-                tempFile.delete()
-            }
-        } catch (error: Exception) {
-            tempFile.delete()
-            outputFile.delete()
-            throw error
+            decryptToTempFile(containerFile, tempFile, passphrase)
+            replaceOutputFile(tempFile, outputFile)
+            success = true
         } finally {
+            if (!success) {
+                tempFile.delete()
+                outputFile.delete()
+            }
             wipeCharArray(passphrase)
         }
     }
@@ -110,9 +96,7 @@ class CryptoEngine {
         var offset = 0
         while (offset < size) {
             val read = stream.read(buffer, offset, size - offset)
-            if (read == -1) {
-                throw IllegalArgumentException("Unexpected end of container")
-            }
+            require(read != -1) { "Unexpected end of container" }
             offset += read
         }
         return buffer
@@ -152,5 +136,29 @@ class CryptoEngine {
     private fun wipeCharArray(buffer: CharArray) {
         // Minimize passphrase exposure in memory after use.
         Arrays.fill(buffer, '\u0000')
+    }
+
+    private fun decryptToTempFile(containerFile: File, tempFile: File, passphrase: CharArray) {
+        containerFile.inputStream().use { input ->
+            val header = parseHeader(input)
+            val cipher = createCipher(passphrase, header)
+            tempFile.parentFile?.mkdirs()
+            java.io.FileOutputStream(tempFile).use { output ->
+                CipherInputStream(input, cipher).use { cipherInput ->
+                    cipherInput.copyTo(output)
+                }
+                output.fd.sync()
+            }
+        }
+    }
+
+    private fun replaceOutputFile(tempFile: File, outputFile: File) {
+        if (outputFile.exists()) {
+            check(outputFile.delete()) { "Failed to replace existing output" }
+        }
+        if (!tempFile.renameTo(outputFile)) {
+            tempFile.copyTo(outputFile, overwrite = true)
+            tempFile.delete()
+        }
     }
 }

@@ -65,7 +65,7 @@ class CatalogRepository @Inject constructor(
         val decrypted = cryptoEngine.decryptToBytes(encrypted, passphrase.toCharArray())
         val json = decrypted.toString(StandardCharsets.UTF_8)
         val adapter = moshi.adapter(CatalogPayload::class.java)
-        adapter.fromJson(json) ?: throw IllegalStateException("Catalog JSON is empty")
+        return@withContext checkNotNull(adapter.fromJson(json)) { "Catalog JSON is empty" }
     }
 
     private suspend fun persistCatalog(payload: CatalogPayload) {

@@ -29,6 +29,7 @@ data class SettingsUiState(
 )
 
 @HiltViewModel
+@Suppress("TooManyFunctions")
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val libraryRepository: LibraryRepository,
@@ -127,10 +128,13 @@ class SettingsViewModel @Inject constructor(
 
     private fun validateSourceSettings(): String? {
         val baseUrl = _state.value.baseUrl.trim()
-        if (baseUrl.isBlank()) return "Base URL is required"
-        val parsed = baseUrl.toHttpUrlOrNull() ?: return "Base URL is invalid"
-        if (parsed.scheme != "https") return "Base URL must use https"
-        if (_state.value.catalogPath.isBlank()) return "Catalog path is required"
-        return null
+        val parsed = baseUrl.toHttpUrlOrNull()
+        return when {
+            baseUrl.isBlank() -> "Base URL is required"
+            parsed == null -> "Base URL is invalid"
+            parsed.scheme != "https" -> "Base URL must use https"
+            _state.value.catalogPath.isBlank() -> "Catalog path is required"
+            else -> null
+        }
     }
 }

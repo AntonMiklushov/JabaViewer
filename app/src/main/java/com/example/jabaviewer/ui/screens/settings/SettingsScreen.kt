@@ -76,116 +76,172 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Source", style = MaterialTheme.typography.titleLarge)
-            OutlinedTextField(
-                value = state.baseUrl,
-                onValueChange = viewModel::updateBaseUrl,
-                label = { Text("Base URL") },
-                modifier = Modifier.fillMaxWidth(),
+            SourceSection(
+                state = state,
+                onBaseUrlChange = viewModel::updateBaseUrl,
+                onCatalogPathChange = viewModel::updateCatalogPath,
+                onPassphraseChange = viewModel::updatePassphrase,
+                onSave = viewModel::saveSettings,
             )
-            OutlinedTextField(
-                value = state.catalogPath,
-                onValueChange = viewModel::updateCatalogPath,
-                label = { Text("Catalog path") },
-                modifier = Modifier.fillMaxWidth(),
+            ReaderSection(
+                state = state,
+                readerMenuExpanded = readerMenu,
+                orientationMenuExpanded = orientationMenu,
+                onReaderMenuChange = { readerMenu = it },
+                onOrientationMenuChange = { orientationMenu = it },
+                onReaderModeChange = viewModel::updateReaderMode,
+                onNightModeChange = viewModel::updateNightMode,
+                onKeepScreenOnChange = viewModel::updateKeepScreenOn,
+                onOrientationChange = viewModel::updateOrientationLock,
             )
-            OutlinedTextField(
-                value = state.passphraseInput,
-                onValueChange = viewModel::updatePassphrase,
-                label = { Text("New passphrase") },
-                modifier = Modifier.fillMaxWidth(),
-                visualTransformation = PasswordVisualTransformation(),
+            CacheSection(
+                cacheLimit = cacheLimit,
+                onCacheLimitChange = { cacheLimit = it },
+                onCacheLimitCommit = { viewModel.updateCacheLimit(cacheLimit.toInt()) },
+                onClearCache = viewModel::clearDecryptedCache,
+                onClearDownloads = viewModel::clearAllDownloads,
             )
-            Button(onClick = viewModel::saveSettings, modifier = Modifier.fillMaxWidth()) {
-                Text("Save source settings")
-            }
-
-            Text("Reader", style = MaterialTheme.typography.titleLarge)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Reading mode", style = MaterialTheme.typography.bodyLarge)
-                BoxWithMenu(
-                    expanded = readerMenu,
-                    onExpandedChange = { readerMenu = it },
-                    current = state.readerMode.name.lowercase(),
-                ) {
-                    ReaderMode.values().forEach { mode ->
-                        DropdownMenuItem(
-                            text = { Text(mode.name.lowercase()) },
-                            onClick = {
-                                viewModel.updateReaderMode(mode)
-                                readerMenu = false
-                            }
-                        )
-                    }
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Night mode", style = MaterialTheme.typography.bodyLarge)
-                Switch(checked = state.nightMode, onCheckedChange = viewModel::updateNightMode)
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Keep screen on", style = MaterialTheme.typography.bodyLarge)
-                Switch(checked = state.keepScreenOn, onCheckedChange = viewModel::updateKeepScreenOn)
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Orientation lock", style = MaterialTheme.typography.bodyLarge)
-                BoxWithMenu(
-                    expanded = orientationMenu,
-                    onExpandedChange = { orientationMenu = it },
-                    current = state.orientationLock.name.lowercase(),
-                ) {
-                    OrientationLock.values().forEach { lock ->
-                        DropdownMenuItem(
-                            text = { Text(lock.name.lowercase()) },
-                            onClick = {
-                                viewModel.updateOrientationLock(lock)
-                                orientationMenu = false
-                            }
-                        )
-                    }
-                }
-            }
-
-            Text("Cache", style = MaterialTheme.typography.titleLarge)
-            Text(
-                text = "Decrypted cache limit: ${cacheLimit.toInt()} MB",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Slider(
-                value = cacheLimit,
-                onValueChange = { cacheLimit = it },
-                onValueChangeFinished = { viewModel.updateCacheLimit(cacheLimit.toInt()) },
-                valueRange = 50f..1000f,
-                steps = 18,
-            )
-            Button(onClick = viewModel::clearDecryptedCache, modifier = Modifier.fillMaxWidth()) {
-                Text("Clear decrypted cache")
-            }
-            Button(onClick = viewModel::clearAllDownloads, modifier = Modifier.fillMaxWidth()) {
-                Text("Clear all downloads")
-            }
-
             state.message?.let { message ->
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(text = message, color = MaterialTheme.colorScheme.tertiary)
             }
         }
+    }
+}
+
+@Composable
+private fun SourceSection(
+    state: SettingsUiState,
+    onBaseUrlChange: (String) -> Unit,
+    onCatalogPathChange: (String) -> Unit,
+    onPassphraseChange: (String) -> Unit,
+    onSave: () -> Unit,
+) {
+    Text("Source", style = MaterialTheme.typography.titleLarge)
+    OutlinedTextField(
+        value = state.baseUrl,
+        onValueChange = onBaseUrlChange,
+        label = { Text("Base URL") },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    OutlinedTextField(
+        value = state.catalogPath,
+        onValueChange = onCatalogPathChange,
+        label = { Text("Catalog path") },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    OutlinedTextField(
+        value = state.passphraseInput,
+        onValueChange = onPassphraseChange,
+        label = { Text("New passphrase") },
+        modifier = Modifier.fillMaxWidth(),
+        visualTransformation = PasswordVisualTransformation(),
+    )
+    Button(onClick = onSave, modifier = Modifier.fillMaxWidth()) {
+        Text("Save source settings")
+    }
+}
+
+@Composable
+private fun ReaderSection(
+    state: SettingsUiState,
+    readerMenuExpanded: Boolean,
+    orientationMenuExpanded: Boolean,
+    onReaderMenuChange: (Boolean) -> Unit,
+    onOrientationMenuChange: (Boolean) -> Unit,
+    onReaderModeChange: (ReaderMode) -> Unit,
+    onNightModeChange: (Boolean) -> Unit,
+    onKeepScreenOnChange: (Boolean) -> Unit,
+    onOrientationChange: (OrientationLock) -> Unit,
+) {
+    Text("Reader", style = MaterialTheme.typography.titleLarge)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Reading mode", style = MaterialTheme.typography.bodyLarge)
+        BoxWithMenu(
+            expanded = readerMenuExpanded,
+            onExpandedChange = onReaderMenuChange,
+            current = state.readerMode.name.lowercase(),
+        ) {
+            ReaderMode.values().forEach { mode ->
+                DropdownMenuItem(
+                    text = { Text(mode.name.lowercase()) },
+                    onClick = {
+                        onReaderModeChange(mode)
+                        onReaderMenuChange(false)
+                    }
+                )
+            }
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Night mode", style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = state.nightMode, onCheckedChange = onNightModeChange)
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Keep screen on", style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = state.keepScreenOn, onCheckedChange = onKeepScreenOnChange)
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Orientation lock", style = MaterialTheme.typography.bodyLarge)
+        BoxWithMenu(
+            expanded = orientationMenuExpanded,
+            onExpandedChange = onOrientationMenuChange,
+            current = state.orientationLock.name.lowercase(),
+        ) {
+            OrientationLock.values().forEach { lock ->
+                DropdownMenuItem(
+                    text = { Text(lock.name.lowercase()) },
+                    onClick = {
+                        onOrientationChange(lock)
+                        onOrientationMenuChange(false)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CacheSection(
+    cacheLimit: Float,
+    onCacheLimitChange: (Float) -> Unit,
+    onCacheLimitCommit: () -> Unit,
+    onClearCache: () -> Unit,
+    onClearDownloads: () -> Unit,
+) {
+    Text("Cache", style = MaterialTheme.typography.titleLarge)
+    Text(
+        text = "Decrypted cache limit: ${cacheLimit.toInt()} MB",
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    Slider(
+        value = cacheLimit,
+        onValueChange = onCacheLimitChange,
+        onValueChangeFinished = onCacheLimitCommit,
+        valueRange = 50f..1000f,
+        steps = 18,
+    )
+    Button(onClick = onClearCache, modifier = Modifier.fillMaxWidth()) {
+        Text("Clear decrypted cache")
+    }
+    Button(onClick = onClearDownloads, modifier = Modifier.fillMaxWidth()) {
+        Text("Clear all downloads")
     }
 }
 

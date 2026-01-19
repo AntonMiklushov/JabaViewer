@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.jabaviewer.data.local.entities.DownloadState
+import com.example.jabaviewer.domain.model.LibraryItem
 import com.example.jabaviewer.ui.util.formatBytes
 import com.example.jabaviewer.ui.util.formatDate
 import androidx.compose.material.icons.Icons
@@ -43,7 +44,6 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ItemDetailsScreen(
-    itemId: String,
     onBack: () -> Unit,
     onOpenReader: () -> Unit,
     viewModel: ItemDetailsViewModel = hiltViewModel(),
@@ -91,101 +91,136 @@ fun ItemDetailsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Text(
-                            text = item.title,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            item.tags.forEach { tag ->
-                                Text(
-                                    text = tag,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(50))
-                                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                                )
-                            }
-                        }
-                        Text(
-                            text = "Size: ${formatBytes(item.size)}",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text = "Last opened: ${formatDate(item.lastOpenedAt)}",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text = "Object key: ${item.objectKey}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                when (item.downloadState) {
-                    DownloadState.DOWNLOADED -> {
-                        Button(onClick = onOpenReader, modifier = Modifier.fillMaxWidth()) {
-                            Text("Open")
-                        }
-                        OutlinedButton(
-                            onClick = { createDocumentLauncher.launch(buildPdfFileName(item.title)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !state.isSaving,
-                        ) {
-                            Text(if (state.isSaving) "Saving..." else "Decrypt save")
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.removeDownload(onBack) },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !state.isRemoving,
-                        ) {
-                            Text("Remove download")
-                        }
-                    }
-                    DownloadState.DOWNLOADING -> {
-                        Text(
-                            text = "Downloading ${item.downloadProgress}%",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.tertiary,
-                        )
-                        OutlinedButton(
-                            onClick = viewModel::cancelDownload,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("Cancel")
-                        }
-                    }
-                    else -> {
-                        Button(onClick = viewModel::download, modifier = Modifier.fillMaxWidth()) {
-                            Text("Download")
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Downloads stay encrypted on disk. PDFs are decrypted only when opened.",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                DetailsInfoCard(item = item)
+                DetailsActions(
+                    item = item,
+                    isSaving = state.isSaving,
+                    isRemoving = state.isRemoving,
+                    onOpenReader = onOpenReader,
+                    onSave = { createDocumentLauncher.launch(buildPdfFileName(item.title)) },
+                    onRemove = { viewModel.removeDownload(onBack) },
+                    onCancelDownload = viewModel::cancelDownload,
+                    onDownload = viewModel::download,
                 )
-                state.errorMessage?.let { message ->
-                    Text(text = message, color = MaterialTheme.colorScheme.error)
-                }
-                state.message?.let { message ->
-                    Text(text = message, color = MaterialTheme.colorScheme.tertiary)
-                }
+                DetailsFooter(
+                    errorMessage = state.errorMessage,
+                    message = state.message,
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun DetailsInfoCard(item: LibraryItem) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item.tags.forEach { tag ->
+                    Text(
+                        text = tag,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                    )
+                }
+            }
+            Text(
+                text = "Size: ${formatBytes(item.size)}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = "Last opened: ${formatDate(item.lastOpenedAt)}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = "Object key: ${item.objectKey}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailsActions(
+    item: LibraryItem,
+    isSaving: Boolean,
+    isRemoving: Boolean,
+    onOpenReader: () -> Unit,
+    onSave: () -> Unit,
+    onRemove: () -> Unit,
+    onCancelDownload: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    when (item.downloadState) {
+        DownloadState.DOWNLOADED -> {
+            Button(onClick = onOpenReader, modifier = Modifier.fillMaxWidth()) {
+                Text("Open")
+            }
+            OutlinedButton(
+                onClick = onSave,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isSaving,
+            ) {
+                Text(if (isSaving) "Saving..." else "Decrypt save")
+            }
+            OutlinedButton(
+                onClick = onRemove,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isRemoving,
+            ) {
+                Text("Remove download")
+            }
+        }
+        DownloadState.DOWNLOADING -> {
+            Text(
+                text = "Downloading ${item.downloadProgress}%",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+            OutlinedButton(
+                onClick = onCancelDownload,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Cancel")
+            }
+        }
+        else -> {
+            Button(onClick = onDownload, modifier = Modifier.fillMaxWidth()) {
+                Text("Download")
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailsFooter(
+    errorMessage: String?,
+    message: String?,
+) {
+    Spacer(modifier = Modifier.height(12.dp))
+    Text(
+        text = "Downloads stay encrypted on disk. PDFs are decrypted only when opened.",
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    errorMessage?.let { text ->
+        Text(text = text, color = MaterialTheme.colorScheme.error)
+    }
+    message?.let { text ->
+        Text(text = text, color = MaterialTheme.colorScheme.tertiary)
     }
 }
 

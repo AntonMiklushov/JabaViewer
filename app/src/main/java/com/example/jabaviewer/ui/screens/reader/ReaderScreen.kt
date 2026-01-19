@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.pm.ActivityInfo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -78,46 +79,16 @@ fun ReaderScreen(
         pdfError = null
     }
 
-    DisposableEffect(state.keepScreenOn) {
-        view.keepScreenOn = state.keepScreenOn
-        onDispose { view.keepScreenOn = false }
-    }
-
-    DisposableEffect(state.orientationLock) {
-        val activity = context as? Activity
-        val original = activity?.requestedOrientation
-        val lock = when (state.orientationLock) {
-            OrientationLock.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            OrientationLock.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-            OrientationLock.SYSTEM -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-        activity?.requestedOrientation = lock
-        onDispose {
-            if (original != null) {
-                activity.requestedOrientation = original
-            }
-        }
-    }
-
-    DisposableEffect(pdfViewRef) {
-        val viewToDispose = pdfViewRef
-        onDispose { viewToDispose?.recycle() }
-    }
+    KeepScreenOnEffect(view = view, keepOn = state.keepScreenOn)
+    OrientationLockEffect(context = context, lock = state.orientationLock)
+    PdfViewRecycleEffect(pdfView = pdfViewRef)
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(state.title.ifBlank { "Reader" }) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showJumpDialog = true }) {
-                        Icon(Icons.Outlined.Pageview, contentDescription = "Jump to page")
-                    }
-                }
+            ReaderTopBar(
+                title = state.title.ifBlank { "Reader" },
+                onBack = onBack,
+                onJump = { showJumpDialog = true },
             )
         },
         bottomBar = {
@@ -133,90 +104,22 @@ fun ReaderScreen(
             }
         },
     ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(padding)
-        ) {
-            when {
-                state.isLoading -> {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                }
-                state.errorMessage != null -> {
-                    Text(
-                        text = state.errorMessage ?: "Failed to open document",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.align(Alignment.Center),
-                    )
-                }
-                pdfError != null -> {
-                    Text(
-                        text = pdfError ?: "Failed to load document",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.align(Alignment.Center),
-                    )
-                }
-                loadKey == null -> {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                }
-                else -> {
-                    AndroidView(
-                        factory = { viewContext ->
-                            PDFView(viewContext, null).also { pdfViewRef = it }
-                        },
-                        update = { pdfView ->
-                            pdfViewRef = pdfView
-                            val key = loadKey ?: return@AndroidView
-                            if (key != lastLoadKey) {
-                                val file = File(key.path)
-                                if (!file.exists()) {
-                                    pdfError = "Document file is missing"
-                                    return@AndroidView
-                                }
-                                pdfView.recycle()
-                                pdfView.fromFile(file)
-                                    .defaultPage(state.currentPage)
-                                    .enableSwipe(true)
-                                    .swipeHorizontal(key.readerMode == ReaderMode.SINGLE)
-                                    .pageSnap(key.readerMode == ReaderMode.SINGLE)
-                                    .pageFling(key.readerMode == ReaderMode.SINGLE)
-                                    .autoSpacing(key.readerMode == ReaderMode.SINGLE)
-                                    .enableDoubletap(true)
-                                    .nightMode(key.nightMode)
-                                    .onPageChange { page, pageCount ->
-                                        viewModel.updatePageCount(pageCount)
-                                        viewModel.updateCurrentPage(page)
-                                    }
-                                    .onLoad { pageCount ->
-                                        isPdfLoaded = true
-                                        viewModel.updatePageCount(pageCount)
-                                        val initialPage = state.currentPage.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
-                                        if (initialPage != 0) {
-                                            pdfView.jumpTo(initialPage, false)
-                                        }
-                                    }
-                                    .onError { error ->
-                                        pdfError = error.message ?: "Failed to load document"
-                                    }
-                                    .load()
-                                lastLoadKey = key
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    if (!isPdfLoaded) {
-                        LinearProgressIndicator(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.TopCenter)
-                        )
-                    }
-                }
-            }
-        }
+        ReaderContent(
+            padding = padding,
+            state = state,
+            loadKey = loadKey,
+            isPdfLoaded = isPdfLoaded,
+            pdfError = pdfError,
+            lastLoadKey = lastLoadKey,
+            onPdfViewReady = { pdfViewRef = it },
+            onUpdateLastKey = { lastLoadKey = it },
+            onPdfLoaded = { isPdfLoaded = true },
+            onPdfError = { pdfError = it },
+            onPageChange = { page, count ->
+                viewModel.updatePageCount(count)
+                viewModel.updateCurrentPage(page)
+            },
+        )
     }
 
     if (showJumpDialog) {
@@ -230,6 +133,187 @@ fun ReaderScreen(
             }
         )
     }
+}
+
+@Composable
+private fun KeepScreenOnEffect(view: android.view.View, keepOn: Boolean) {
+    DisposableEffect(keepOn) {
+        view.keepScreenOn = keepOn
+        onDispose { view.keepScreenOn = false }
+    }
+}
+
+@Composable
+private fun OrientationLockEffect(
+    context: android.content.Context,
+    lock: OrientationLock,
+) {
+    DisposableEffect(lock) {
+        val activity = context as? Activity
+        val original = activity?.requestedOrientation
+        val lockValue = when (lock) {
+            OrientationLock.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            OrientationLock.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            OrientationLock.SYSTEM -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        activity?.requestedOrientation = lockValue
+        onDispose {
+            if (original != null) {
+                activity.requestedOrientation = original
+            }
+        }
+    }
+}
+
+@Composable
+private fun PdfViewRecycleEffect(pdfView: PDFView?) {
+    DisposableEffect(pdfView) {
+        val viewToDispose = pdfView
+        onDispose { viewToDispose?.recycle() }
+    }
+}
+
+@Composable
+private fun ReaderTopBar(
+    title: String,
+    onBack: () -> Unit,
+    onJump: () -> Unit,
+) {
+    TopAppBar(
+        title = { Text(title) },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
+            }
+        },
+        actions = {
+            IconButton(onClick = onJump) {
+                Icon(Icons.Outlined.Pageview, contentDescription = "Jump to page")
+            }
+        }
+    )
+}
+
+@Composable
+private fun ReaderContent(
+    padding: PaddingValues,
+    state: ReaderUiState,
+    loadKey: PdfLoadKey?,
+    isPdfLoaded: Boolean,
+    pdfError: String?,
+    lastLoadKey: PdfLoadKey?,
+    onPdfViewReady: (PDFView) -> Unit,
+    onUpdateLastKey: (PdfLoadKey) -> Unit,
+    onPdfLoaded: () -> Unit,
+    onPdfError: (String) -> Unit,
+    onPageChange: (Int, Int) -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(padding)
+    ) {
+        when {
+            state.isLoading -> {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+            state.errorMessage != null -> {
+                ErrorText(message = state.errorMessage ?: "Failed to open document")
+            }
+            pdfError != null -> {
+                ErrorText(message = pdfError.ifBlank { "Failed to load document" })
+            }
+            loadKey == null -> {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+            else -> {
+                PdfViewContainer(
+                    loadKey = loadKey,
+                    currentPage = state.currentPage,
+                    lastLoadKey = lastLoadKey,
+                    onPdfViewReady = onPdfViewReady,
+                    onUpdateLastKey = onUpdateLastKey,
+                    onPdfLoaded = onPdfLoaded,
+                    onPdfError = onPdfError,
+                    onPageChange = onPageChange,
+                )
+                if (!isPdfLoaded) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopCenter)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PdfViewContainer(
+    loadKey: PdfLoadKey,
+    currentPage: Int,
+    lastLoadKey: PdfLoadKey?,
+    onPdfViewReady: (PDFView) -> Unit,
+    onUpdateLastKey: (PdfLoadKey) -> Unit,
+    onPdfLoaded: () -> Unit,
+    onPdfError: (String) -> Unit,
+    onPageChange: (Int, Int) -> Unit,
+) {
+    AndroidView(
+        factory = { viewContext ->
+            PDFView(viewContext, null).also(onPdfViewReady)
+        },
+        update = { pdfView ->
+            onPdfViewReady(pdfView)
+            if (loadKey == lastLoadKey) return@AndroidView
+            val file = File(loadKey.path)
+            if (!file.exists()) {
+                onPdfError("Document file is missing")
+                return@AndroidView
+            }
+            pdfView.recycle()
+            val singlePage = loadKey.readerMode == ReaderMode.SINGLE
+            pdfView.fromFile(file)
+                .defaultPage(currentPage)
+                .enableSwipe(true)
+                .swipeHorizontal(singlePage)
+                .pageSnap(singlePage)
+                .pageFling(singlePage)
+                .autoSpacing(singlePage)
+                .enableDoubletap(true)
+                .nightMode(loadKey.nightMode)
+                .onPageChange { page, pageCount -> onPageChange(page, pageCount) }
+                .onLoad { pageCount ->
+                    onPdfLoaded()
+                    onPageChange(currentPage.coerceAtLeast(0), pageCount)
+                    val initialPage = currentPage.coerceIn(
+                        0,
+                        (pageCount - 1).coerceAtLeast(0),
+                    )
+                    if (initialPage != 0) {
+                        pdfView.jumpTo(initialPage, false)
+                    }
+                }
+                .onError { error ->
+                    onPdfError(error.message ?: "Failed to load document")
+                }
+                .load()
+            onUpdateLastKey(loadKey)
+        },
+        modifier = Modifier.fillMaxSize(),
+    )
+}
+
+@Composable
+private fun BoxScope.ErrorText(message: String) {
+    Text(
+        text = message,
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.error,
+        modifier = Modifier.align(Alignment.Center),
+    )
 }
 
 @Composable

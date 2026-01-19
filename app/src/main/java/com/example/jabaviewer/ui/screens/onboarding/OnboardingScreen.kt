@@ -51,108 +51,138 @@ fun OnboardingScreen(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Jaba Library",
-                    style = MaterialTheme.typography.displayLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Text(
-                    text = "Bring your encrypted catalog to the phone and read anywhere.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
-                )
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    OutlinedTextField(
-                        value = state.baseUrl,
-                        onValueChange = viewModel::updateBaseUrl,
-                        label = { Text("Site base URL") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
-                    OutlinedTextField(
-                        value = state.catalogPath,
-                        onValueChange = viewModel::updateCatalogPath,
-                        label = { Text("Catalog path") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
-                    OutlinedTextField(
-                        value = state.passphrase,
-                        onValueChange = viewModel::updatePassphrase,
-                        label = { Text("Passphrase") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                    )
-
-                    if (state.isLoading) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
-
-                    state.testResult?.let { result ->
-                        val text = when (result) {
-                            is TestResult.Success -> "Catalog v${result.version} \u2022 ${result.itemCount} items"
-                            is TestResult.Error -> result.message
-                        }
-                        val color = if (result is TestResult.Success) {
-                            MaterialTheme.colorScheme.tertiary
-                        } else {
-                            MaterialTheme.colorScheme.error
-                        }
-                        Text(
-                            text = text,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = color,
-                            fontWeight = FontWeight.Medium,
-                        )
-                    }
-
-                    state.errorMessage?.let { message ->
-                        Text(
-                            text = message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        OutlinedButton(
-                            onClick = viewModel::testConnection,
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !state.isLoading,
-                        ) {
-                            Text("Test connection")
-                        }
-                        Button(
-                            onClick = { viewModel.saveAndSync(onContinue) },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !state.isLoading,
-                        ) {
-                            Text("Continue")
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Your passphrase is stored securely and never leaves the device.",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+            OnboardingHeader()
+            OnboardingCard(
+                state = state,
+                onBaseUrlChange = viewModel::updateBaseUrl,
+                onCatalogPathChange = viewModel::updateCatalogPath,
+                onPassphraseChange = viewModel::updatePassphrase,
+                onTestConnection = viewModel::testConnection,
+                onContinue = { viewModel.saveAndSync(onContinue) },
             )
+            OnboardingFooter()
         }
     }
+}
+
+@Composable
+private fun OnboardingHeader() {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "Jaba Library",
+            style = MaterialTheme.typography.displayLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            text = "Bring your encrypted catalog to the phone and read anywhere.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
+        )
+    }
+}
+
+@Composable
+private fun OnboardingCard(
+    state: OnboardingUiState,
+    onBaseUrlChange: (String) -> Unit,
+    onCatalogPathChange: (String) -> Unit,
+    onPassphraseChange: (String) -> Unit,
+    onTestConnection: () -> Unit,
+    onContinue: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            OutlinedTextField(
+                value = state.baseUrl,
+                onValueChange = onBaseUrlChange,
+                label = { Text("Site base URL") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = state.catalogPath,
+                onValueChange = onCatalogPathChange,
+                label = { Text("Catalog path") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = state.passphrase,
+                onValueChange = onPassphraseChange,
+                label = { Text("Passphrase") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+            )
+
+            OnboardingStatus(state = state)
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedButton(
+                    onClick = onTestConnection,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.isLoading,
+                ) {
+                    Text("Test connection")
+                }
+                Button(
+                    onClick = onContinue,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.isLoading,
+                ) {
+                    Text("Continue")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OnboardingStatus(state: OnboardingUiState) {
+    if (state.isLoading) {
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+    }
+
+    state.testResult?.let { result ->
+        val text = when (result) {
+            is TestResult.Success -> "Catalog v${result.version} \u2022 ${result.itemCount} items"
+            is TestResult.Error -> result.message
+        }
+        val color = if (result is TestResult.Success) {
+            MaterialTheme.colorScheme.tertiary
+        } else {
+            MaterialTheme.colorScheme.error
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = color,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+
+    state.errorMessage?.let { message ->
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+}
+
+@Composable
+private fun OnboardingFooter() {
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        text = "Your passphrase is stored securely and never leaves the device.",
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+    )
 }

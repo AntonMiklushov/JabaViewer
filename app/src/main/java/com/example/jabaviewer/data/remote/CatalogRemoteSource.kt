@@ -15,10 +15,8 @@ class CatalogRemoteSource @Inject constructor(
             val url = combineUrl(baseUrl, catalogPath)
             val request = Request.Builder().url(url).build()
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IllegalStateException("Catalog request failed: ${response.code}")
-                }
-                response.body?.bytes() ?: throw IllegalStateException("Empty catalog response")
+                check(response.isSuccessful) { "Catalog request failed: ${response.code}" }
+                checkNotNull(response.body?.bytes()) { "Empty catalog response" }
             }
         }
 }

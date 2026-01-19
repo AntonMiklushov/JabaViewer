@@ -23,7 +23,11 @@ fun AppNavGraph(
     ) {
         composable(Routes.Onboarding) {
             OnboardingScreen(
-                onContinue = { navController.navigate(Routes.Library) { popUpTo(Routes.Onboarding) { inclusive = true } } }
+                onContinue = {
+                    navController.navigate(Routes.Library) {
+                        popUpTo(Routes.Onboarding) { inclusive = true }
+                    }
+                }
             )
         }
         composable(Routes.Library) {
@@ -42,7 +46,6 @@ fun AppNavGraph(
         ) { backStackEntry ->
             val itemId = backStackEntry.arguments?.getString("itemId").orEmpty()
             ItemDetailsScreen(
-                itemId = itemId,
                 onBack = { navController.popBackStack() },
                 onOpenReader = { navController.navigate(Routes.reader(itemId)) },
             )

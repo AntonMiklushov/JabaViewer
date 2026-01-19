@@ -39,16 +39,12 @@ class SettingsDataStore @Inject constructor(
         AppSettings(
             baseUrl = prefs[Keys.baseUrl] ?: AppConstants.DEFAULT_BASE_URL,
             catalogPath = prefs[Keys.catalogPath] ?: AppConstants.DEFAULT_CATALOG_PATH,
-            libraryLayout = prefs[Keys.libraryLayout]?.let { runCatching { LibraryLayout.valueOf(it) }.getOrNull() }
-                ?: LibraryLayout.LIST,
-            sortOrder = prefs[Keys.sortOrder]?.let { runCatching { SortOrder.valueOf(it) }.getOrNull() }
-                ?: SortOrder.RECENT,
-            readerMode = prefs[Keys.readerMode]?.let { runCatching { ReaderMode.valueOf(it) }.getOrNull() }
-                ?: ReaderMode.CONTINUOUS,
+            libraryLayout = parseEnum(prefs[Keys.libraryLayout], LibraryLayout.LIST),
+            sortOrder = parseEnum(prefs[Keys.sortOrder], SortOrder.RECENT),
+            readerMode = parseEnum(prefs[Keys.readerMode], ReaderMode.CONTINUOUS),
             nightMode = prefs[Keys.nightMode] ?: false,
             keepScreenOn = prefs[Keys.keepScreenOn] ?: false,
-            orientationLock = prefs[Keys.orientationLock]?.let { runCatching { OrientationLock.valueOf(it) }.getOrNull() }
-                ?: OrientationLock.SYSTEM,
+            orientationLock = parseEnum(prefs[Keys.orientationLock], OrientationLock.SYSTEM),
             decryptedCacheLimitMb = prefs[Keys.decryptedCacheLimitMb] ?: AppConstants.DEFAULT_CACHE_LIMIT_MB,
         )
     }
@@ -87,5 +83,10 @@ class SettingsDataStore @Inject constructor(
 
     suspend fun updateDecryptedCacheLimitMb(value: Int) {
         dataStore.edit { it[Keys.decryptedCacheLimitMb] = value.coerceIn(50, 1000) }
+    }
+
+    private fun <T : Enum<T>> parseEnum(value: String?, fallback: T): T {
+        if (value.isNullOrBlank()) return fallback
+        return runCatching { java.lang.Enum.valueOf(fallback.javaClass, value) }.getOrDefault(fallback)
     }
 }

@@ -47,12 +47,7 @@ data class ReaderUiState(
 @HiltViewModel
 class ReaderViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val libraryRepository: LibraryRepository,
-    private val settingsRepository: SettingsRepository,
-    private val passphraseStore: PassphraseStore,
-    private val cryptoEngine: CryptoEngine,
-    private val storage: DocumentStorage,
-    private val cacheManager: DecryptedCacheManager,
+    private val dependencies: ReaderDependencies,
 ) : ViewModel() {
     private val itemId = savedStateHandle.get<String>("itemId").orEmpty()
     private var cacheLimitMb: Int = 200
@@ -64,7 +59,7 @@ class ReaderViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            settingsRepository.settingsFlow.collectLatest { settings ->
+            dependencies.settingsRepository.settingsFlow.collectLatest { settings ->
                 cacheLimitMb = settings.decryptedCacheLimitMb
                 _uiState.value = _uiState.value.copy(
                     readerMode = settings.readerMode,
@@ -79,7 +74,7 @@ class ReaderViewModel @Inject constructor(
                 .distinctUntilChanged()
                 .debounce(750)
                 .collect { pageIndex ->
-                    libraryRepository.updateReadingState(
+                    dependencies.libraryRepository.updateReadingState(
                         itemId = itemId,
                         decryptedCachePath = null,
                         lastPage = pageIndex,
@@ -93,10 +88,11 @@ class ReaderViewModel @Inject constructor(
     }
 
     fun updateCurrentPage(pageIndex: Int) {
-        if (pageIndex < 0) return
         val pageCount = _uiState.value.pageCount
-        if (pageCount > 0 && pageIndex >= pageCount) return
-        if (_uiState.value.currentPage == pageIndex) return
+        val isInvalid = pageIndex < 0 ||
+            (pageCount > 0 && pageIndex >= pageCount) ||
+            _uiState.value.currentPage == pageIndex
+        if (isInvalid) return
         _uiState.value = _uiState.value.copy(currentPage = pageIndex)
         pageUpdates.tryEmit(pageIndex)
     }
@@ -115,15 +111,14 @@ class ReaderViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
         try {
             val loaded = withContext(Dispatchers.IO) {
-                val item = libraryRepository.getCatalogItem(itemId)
-                    ?: throw IllegalStateException("Document not found")
-                val local = libraryRepository.getLocalDocument(itemId)
-                val encryptedFile = local?.encryptedFilePath?.let { File(it) }
-                    ?: storage.encryptedFileFor(item.objectKey)
-                if (!encryptedFile.exists()) {
-                    throw IllegalStateException("Document is not downloaded")
+                val item = checkNotNull(dependencies.libraryRepository.getCatalogItem(itemId)) {
+                    "Document not found"
                 }
-                val decryptedFile = storage.decryptedFileFor(item.id)
+                val local = dependencies.libraryRepository.getLocalDocument(itemId)
+                val encryptedFile = local?.encryptedFilePath?.let { File(it) }
+                    ?: dependencies.storage.encryptedFileFor(item.objectKey)
+                check(encryptedFile.exists()) { "Document is not downloaded" }
+                val decryptedFile = dependencies.storage.decryptedFileFor(item.id)
                 if (!decryptedFile.exists()) {
                     decryptToFile(encryptedFile, decryptedFile)
                 } else if (!isPdfValid(decryptedFile)) {
@@ -131,12 +126,15 @@ class ReaderViewModel @Inject constructor(
                     decryptToFile(encryptedFile, decryptedFile)
                 }
                 decryptedFile.setLastModified(System.currentTimeMillis())
-                val evicted = cacheManager.pruneCache(cacheLimitMb, protectedFiles = setOf(decryptedFile))
+                val evicted = dependencies.cacheManager.pruneCache(
+                    cacheLimitMb,
+                    protectedFiles = setOf(decryptedFile),
+                )
                 LoadedDocument(item, local, decryptedFile, evicted)
             }
 
             if (loaded.evictedItemIds.isNotEmpty()) {
-                libraryRepository.clearDecryptedPaths(loaded.evictedItemIds)
+                dependencies.libraryRepository.clearDecryptedPaths(loaded.evictedItemIds)
             }
 
             val lastPage = (loaded.local?.lastPage ?: 0).coerceAtLeast(0)
@@ -147,30 +145,45 @@ class ReaderViewModel @Inject constructor(
                 isLoading = false,
                 decryptedFilePath = loaded.decryptedFile.absolutePath,
             )
-            libraryRepository.updateReadingState(
+            dependencies.libraryRepository.updateReadingState(
                 itemId = loaded.item.id,
                 decryptedCachePath = loaded.decryptedFile.absolutePath,
                 lastPage = lastPage,
                 lastOpenedAt = System.currentTimeMillis(),
             )
-        } catch (error: Exception) {
-            val message = when (error) {
-                is AEADBadTagException -> "Wrong passphrase or corrupted file"
-                else -> error.message ?: "Failed to open document"
-            }
-            _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = message)
+        } catch (error: AEADBadTagException) {
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                errorMessage = "Wrong passphrase or corrupted file",
+            )
+        } catch (error: IllegalStateException) {
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                errorMessage = error.message ?: "Failed to open document",
+            )
+        } catch (error: java.io.IOException) {
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                errorMessage = error.message ?: "Failed to open document",
+            )
+        } catch (error: SecurityException) {
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                errorMessage = error.message ?: "Failed to open document",
+            )
         }
     }
 
     private suspend fun decryptToFile(encryptedFile: File, decryptedFile: File) {
         withContext(Dispatchers.IO) {
-            val passphrase = passphraseStore.getPassphrase()
-                ?: throw IllegalStateException("Passphrase is missing")
-            cryptoEngine.decryptToFile(encryptedFile, decryptedFile, passphrase.toCharArray())
+            val passphrase = checkNotNull(dependencies.passphraseStore.getPassphrase()) {
+                "Passphrase is missing"
+            }
+            dependencies.cryptoEngine.decryptToFile(encryptedFile, decryptedFile, passphrase.toCharArray())
         }
         if (!isPdfValid(decryptedFile)) {
             decryptedFile.delete()
-            throw IllegalStateException("Wrong passphrase or corrupted file")
+            error("Wrong passphrase or corrupted file")
         }
     }
 
@@ -185,3 +198,12 @@ class ReaderViewModel @Inject constructor(
         private const val PAGE_COUNT_UNKNOWN = 0
     }
 }
+
+class ReaderDependencies @Inject constructor(
+    val libraryRepository: LibraryRepository,
+    val settingsRepository: SettingsRepository,
+    val passphraseStore: PassphraseStore,
+    val cryptoEngine: CryptoEngine,
+    val storage: DocumentStorage,
+    val cacheManager: DecryptedCacheManager,
+)

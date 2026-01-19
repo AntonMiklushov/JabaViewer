@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import javax.crypto.AEADBadTagException
 import javax.inject.Inject
 
@@ -100,52 +101,85 @@ class ItemDetailsViewModel @Inject constructor(
             _state.value = _state.value.copy(isSaving = true, errorMessage = null, message = null)
             try {
                 withContext(Dispatchers.IO) {
-                    val encryptedFile = libraryRepository.getLocalDocument(item.id)
-                        ?.encryptedFilePath
-                        ?.let { File(it) }
-                        ?: storage.encryptedFileFor(item.objectKey)
-                    if (!encryptedFile.exists()) {
-                        throw IllegalStateException("Document is not downloaded")
-                    }
+                    val encryptedFile = resolveEncryptedFile(item)
                     val decryptedFile = storage.decryptedFileFor(item.id)
-                    val hasValidDecrypted = decryptedFile.exists() && isPdfValid(decryptedFile)
-                    if (!hasValidDecrypted) {
-                        if (decryptedFile.exists()) {
-                            decryptedFile.delete()
-                        }
-                        decryptToFile(encryptedFile, decryptedFile)
-                    }
-                    contentResolver.openOutputStream(targetUri)?.use { output ->
-                        decryptedFile.inputStream().use { input ->
-                            input.copyTo(output)
-                            output.flush()
-                        }
-                    } ?: throw IllegalStateException("Unable to open destination")
-                    if (!hasValidDecrypted) {
+                    val usedTempDecrypt = ensureDecryptedFile(encryptedFile, decryptedFile)
+                    writeDecryptedCopy(contentResolver, targetUri, decryptedFile)
+                    if (usedTempDecrypt) {
                         decryptedFile.delete()
                         decryptedFile.parentFile?.takeIf { it.listFiles().isNullOrEmpty() }?.delete()
                     }
                 }
                 _state.value = _state.value.copy(isSaving = false, message = "Decrypted PDF saved")
-            } catch (error: Exception) {
-                val message = when (error) {
-                    is AEADBadTagException -> "Wrong passphrase or corrupted file"
-                    else -> error.message ?: "Failed to save decrypted file"
-                }
-                _state.value = _state.value.copy(isSaving = false, errorMessage = message)
+            } catch (error: AEADBadTagException) {
+                _state.value = _state.value.copy(
+                    isSaving = false,
+                    errorMessage = "Wrong passphrase or corrupted file",
+                )
+            } catch (error: IllegalStateException) {
+                _state.value = _state.value.copy(
+                    isSaving = false,
+                    errorMessage = error.message ?: "Failed to save decrypted file",
+                )
+            } catch (error: IOException) {
+                _state.value = _state.value.copy(
+                    isSaving = false,
+                    errorMessage = error.message ?: "Failed to save decrypted file",
+                )
+            } catch (error: SecurityException) {
+                _state.value = _state.value.copy(
+                    isSaving = false,
+                    errorMessage = error.message ?: "Failed to save decrypted file",
+                )
+            }
+        }
+    }
+
+    private suspend fun resolveEncryptedFile(item: LibraryItem): File {
+        val localPath = libraryRepository.getLocalDocument(item.id)
+            ?.encryptedFilePath
+            ?.let { File(it) }
+        val encryptedFile = localPath ?: storage.encryptedFileFor(item.objectKey)
+        check(encryptedFile.exists()) { "Document is not downloaded" }
+        return encryptedFile
+    }
+
+    private suspend fun ensureDecryptedFile(encryptedFile: File, decryptedFile: File): Boolean {
+        val hasValidDecrypted = decryptedFile.exists() && isPdfValid(decryptedFile)
+        if (!hasValidDecrypted) {
+            if (decryptedFile.exists()) {
+                decryptedFile.delete()
+            }
+            decryptToFile(encryptedFile, decryptedFile)
+        }
+        return !hasValidDecrypted
+    }
+
+    private fun writeDecryptedCopy(
+        contentResolver: ContentResolver,
+        targetUri: Uri,
+        decryptedFile: File,
+    ) {
+        val outputStream = contentResolver.openOutputStream(targetUri)
+        checkNotNull(outputStream) { "Unable to open destination" }
+        outputStream.use { output ->
+            decryptedFile.inputStream().use { input ->
+                input.copyTo(output)
+                output.flush()
             }
         }
     }
 
     private suspend fun decryptToFile(encryptedFile: File, decryptedFile: File) {
         withContext(Dispatchers.IO) {
-            val passphrase = passphraseStore.getPassphrase()
-                ?: throw IllegalStateException("Passphrase is missing")
+            val passphrase = checkNotNull(passphraseStore.getPassphrase()) {
+                "Passphrase is missing"
+            }
             cryptoEngine.decryptToFile(encryptedFile, decryptedFile, passphrase.toCharArray())
         }
         if (!isPdfValid(decryptedFile)) {
             decryptedFile.delete()
-            throw IllegalStateException("Wrong passphrase or corrupted file")
+            error("Wrong passphrase or corrupted file")
         }
     }
 }

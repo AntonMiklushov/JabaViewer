@@ -80,16 +80,33 @@ class DownloadDocumentWorker @AssistedInject constructor(
                 downloadedAt = System.currentTimeMillis(),
             )
             Result.success()
-        } catch (error: Exception) {
-            val retry = error is IOException
+        } catch (error: IOException) {
             libraryRepository.updateDownloadState(
                 itemId,
-                if (retry) DownloadState.DOWNLOADING else DownloadState.FAILED,
+                DownloadState.DOWNLOADING,
                 progress = 0,
                 encryptedFilePath = destinationFile.absolutePath,
                 downloadedAt = null,
             )
-            if (retry) Result.retry() else Result.failure()
+            Result.retry()
+        } catch (error: IllegalStateException) {
+            libraryRepository.updateDownloadState(
+                itemId,
+                DownloadState.FAILED,
+                progress = 0,
+                encryptedFilePath = destinationFile.absolutePath,
+                downloadedAt = null,
+            )
+            Result.failure()
+        } catch (error: SecurityException) {
+            libraryRepository.updateDownloadState(
+                itemId,
+                DownloadState.FAILED,
+                progress = 0,
+                encryptedFilePath = destinationFile.absolutePath,
+                downloadedAt = null,
+            )
+            Result.failure()
         }
     }
 
