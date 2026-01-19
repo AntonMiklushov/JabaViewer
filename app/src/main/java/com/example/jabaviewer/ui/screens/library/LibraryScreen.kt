@@ -109,6 +109,7 @@ fun LibraryScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LibraryTopBar(
     isList: Boolean,

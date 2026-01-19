@@ -173,6 +173,7 @@ private fun PdfViewRecycleEffect(pdfView: PDFView?) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReaderTopBar(
     title: String,
