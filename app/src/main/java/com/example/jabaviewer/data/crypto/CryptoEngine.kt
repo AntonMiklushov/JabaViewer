@@ -122,6 +122,7 @@ class CryptoEngine {
     private companion object {
         private val MAGIC_BYTES = "LIB1".toByteArray(Charsets.US_ASCII)
         private const val GCM_TAG_BYTES = 16
+
         // Prevent pathological iteration counts from locking up the UI on corrupted inputs.
         private const val MAX_PBKDF2_ITERATIONS = 10_000_000
     }

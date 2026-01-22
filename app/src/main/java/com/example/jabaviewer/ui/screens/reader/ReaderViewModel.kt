@@ -30,7 +30,6 @@ import java.io.File
 import javax.crypto.AEADBadTagException
 import javax.inject.Inject
 
-
 data class ReaderUiState(
     val title: String = "",
     val pageCount: Int = 0,

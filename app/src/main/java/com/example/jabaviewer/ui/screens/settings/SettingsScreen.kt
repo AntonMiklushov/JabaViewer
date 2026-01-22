@@ -144,6 +144,7 @@ private fun SourceSection(
     }
 }
 
+@Suppress("LongMethod")
 @Composable
 private fun ReaderSection(
     data: ReaderSectionData,

@@ -28,6 +28,7 @@ class DownloadDocumentWorker @AssistedInject constructor(
     private val libraryRepository: LibraryRepository,
     private val storage: DocumentStorage,
 ) : CoroutineWorker(context, params) {
+    @Suppress("LongMethod")
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val itemId = inputData.getString(KEY_ITEM_ID) ?: return@withContext Result.failure()
         val item = libraryRepository.getCatalogItem(itemId)

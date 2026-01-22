@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package com.example.jabaviewer.ui.screens.reader
 
 import android.app.Activity
@@ -144,6 +146,7 @@ fun ReaderScreen(
     }
 }
 
+@Suppress("LongParameterList")
 @Composable
 private fun ReaderScreenEffects(
     itemId: String,

@@ -48,21 +48,24 @@ class LibraryRepository @Inject constructor(
         downloadedAt: Long?,
     ) {
         val current = localDocumentDao.getLocalDocument(itemId)
-        val updated = (current ?: LocalDocumentEntity(
-            catalogItemId = itemId,
-            encryptedFilePath = null,
-            decryptedCachePath = null,
-            downloadedAt = null,
-            lastOpenedAt = null,
-            lastPage = null,
-            downloadState = DownloadState.NOT_DOWNLOADED,
-            downloadProgress = 0,
-        )).copy(
-            encryptedFilePath = encryptedFilePath ?: current?.encryptedFilePath,
-            downloadedAt = downloadedAt ?: current?.downloadedAt,
-            downloadState = state,
-            downloadProgress = progress,
-        )
+        val updated = (
+            current ?: LocalDocumentEntity(
+                catalogItemId = itemId,
+                encryptedFilePath = null,
+                decryptedCachePath = null,
+                downloadedAt = null,
+                lastOpenedAt = null,
+                lastPage = null,
+                downloadState = DownloadState.NOT_DOWNLOADED,
+                downloadProgress = 0,
+            )
+            )
+            .copy(
+                encryptedFilePath = encryptedFilePath ?: current?.encryptedFilePath,
+                downloadedAt = downloadedAt ?: current?.downloadedAt,
+                downloadState = state,
+                downloadProgress = progress,
+            )
         localDocumentDao.upsert(updated)
     }
 
@@ -73,20 +76,23 @@ class LibraryRepository @Inject constructor(
         lastOpenedAt: Long?,
     ) {
         val current = localDocumentDao.getLocalDocument(itemId)
-        val updated = (current ?: LocalDocumentEntity(
-            catalogItemId = itemId,
-            encryptedFilePath = null,
-            decryptedCachePath = null,
-            downloadedAt = null,
-            lastOpenedAt = null,
-            lastPage = null,
-            downloadState = DownloadState.NOT_DOWNLOADED,
-            downloadProgress = 0,
-        )).copy(
-            decryptedCachePath = decryptedCachePath ?: current?.decryptedCachePath,
-            lastPage = lastPage ?: current?.lastPage,
-            lastOpenedAt = lastOpenedAt ?: current?.lastOpenedAt,
-        )
+        val updated = (
+            current ?: LocalDocumentEntity(
+                catalogItemId = itemId,
+                encryptedFilePath = null,
+                decryptedCachePath = null,
+                downloadedAt = null,
+                lastOpenedAt = null,
+                lastPage = null,
+                downloadState = DownloadState.NOT_DOWNLOADED,
+                downloadProgress = 0,
+            )
+            )
+            .copy(
+                decryptedCachePath = decryptedCachePath ?: current?.decryptedCachePath,
+                lastPage = lastPage ?: current?.lastPage,
+                lastOpenedAt = lastOpenedAt ?: current?.lastOpenedAt,
+            )
         localDocumentDao.upsert(updated)
     }
 
