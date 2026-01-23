@@ -3,6 +3,7 @@ package com.example.jabaviewer.di
 import android.content.Context
 import androidx.room.Room
 import com.example.jabaviewer.data.local.AppDatabase
+import com.example.jabaviewer.data.local.DatabaseMigrations
 import com.example.jabaviewer.data.local.dao.BookmarkDao
 import com.example.jabaviewer.data.local.dao.CatalogDao
 import com.example.jabaviewer.data.local.dao.LocalDocumentDao
@@ -20,6 +21,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
         return Room.databaseBuilder(context, AppDatabase::class.java, "jaba_viewer.db")
+            .addMigrations(DatabaseMigrations.MIGRATION_1_2)
             .build()
     }
 

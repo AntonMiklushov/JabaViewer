@@ -36,4 +36,5 @@ class SettingsRepository @Inject constructor(
     suspend fun updateKeepScreenOn(value: Boolean) = settingsDataStore.updateKeepScreenOn(value)
     suspend fun updateOrientationLock(value: OrientationLock) = settingsDataStore.updateOrientationLock(value)
     suspend fun updateDecryptedCacheLimitMb(value: Int) = settingsDataStore.updateDecryptedCacheLimitMb(value)
+    suspend fun updateDjvuConversionDpi(value: Int) = settingsDataStore.updateDjvuConversionDpi(value)
 }

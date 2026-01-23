@@ -136,7 +136,8 @@ class LibraryViewModel @Inject constructor(
         return items.filter { item ->
             val matchesQuery = trimmed.isBlank() ||
                 item.title.contains(trimmed, ignoreCase = true) ||
-                item.tags.any { it.contains(trimmed, ignoreCase = true) }
+                item.tags.any { it.contains(trimmed, ignoreCase = true) } ||
+                item.format.label.contains(trimmed, ignoreCase = true)
             val matchesTags = tags.isEmpty() || item.tags.any { tags.contains(it) }
             matchesQuery && matchesTags
         }

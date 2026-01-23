@@ -382,7 +382,7 @@ private fun LibraryItemCard(
             )
             LibraryItemTags(tags = item.tags)
             Text(
-                text = "${formatBytes(item.size)} \u2022 ${formatDate(item.lastOpenedAt)}",
+                text = "${item.format.label} \u2022 ${formatBytes(item.size)} \u2022 ${formatDate(item.lastOpenedAt)}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

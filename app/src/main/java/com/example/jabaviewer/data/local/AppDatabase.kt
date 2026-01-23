@@ -18,7 +18,7 @@ import com.example.jabaviewer.data.local.entities.LocalDocumentEntity
         CatalogMetadataEntity::class,
         BookmarkEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

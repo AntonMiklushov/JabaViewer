@@ -10,5 +10,6 @@ data class CatalogItemEntity(
     val objectKey: String,
     val size: Long,
     val tags: String,
+    val format: String,
     val updatedAt: Long,
 )

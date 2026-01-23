@@ -30,3 +30,6 @@
 # Keep Moshi-reflected catalog DTOs from R8 class merging/obfuscation.
 -keep class com.example.jabaviewer.data.remote.model.CatalogPayload { *; }
 -keep class com.example.jabaviewer.data.remote.model.CatalogItemPayload { *; }
+
+# Keep DjVuLibre JNI bindings.
+-keep class com.github.axet.djvulibre.** { *; }

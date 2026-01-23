@@ -18,6 +18,7 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
     name = "settings"
 )
 
+@Suppress("TooManyFunctions")
 class SettingsDataStore @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
@@ -33,6 +34,7 @@ class SettingsDataStore @Inject constructor(
         val keepScreenOn = booleanPreferencesKey("keep_screen_on")
         val orientationLock = stringPreferencesKey("orientation_lock")
         val decryptedCacheLimitMb = intPreferencesKey("decrypted_cache_limit_mb")
+        val djvuConversionDpi = intPreferencesKey("djvu_conversion_dpi")
     }
 
     val settingsFlow: Flow<AppSettings> = dataStore.data.map { prefs ->
@@ -46,6 +48,8 @@ class SettingsDataStore @Inject constructor(
             keepScreenOn = prefs[Keys.keepScreenOn] ?: false,
             orientationLock = parseEnum(prefs[Keys.orientationLock], OrientationLock.SYSTEM),
             decryptedCacheLimitMb = prefs[Keys.decryptedCacheLimitMb] ?: AppConstants.DEFAULT_CACHE_LIMIT_MB,
+            djvuConversionDpi = prefs[Keys.djvuConversionDpi]
+                ?: AppConstants.DEFAULT_DJVU_CONVERSION_DPI,
         )
     }
 
@@ -83,6 +87,15 @@ class SettingsDataStore @Inject constructor(
 
     suspend fun updateDecryptedCacheLimitMb(value: Int) {
         dataStore.edit { it[Keys.decryptedCacheLimitMb] = value.coerceIn(50, 1000) }
+    }
+
+    suspend fun updateDjvuConversionDpi(value: Int) {
+        dataStore.edit {
+            it[Keys.djvuConversionDpi] = value.coerceIn(
+                AppConstants.MIN_DJVU_CONVERSION_DPI,
+                AppConstants.MAX_DJVU_CONVERSION_DPI,
+            )
+        }
     }
 
     private fun <T : Enum<T>> parseEnum(value: String?, fallback: T): T {

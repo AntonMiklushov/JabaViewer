@@ -7,6 +7,7 @@ import com.example.jabaviewer.data.repository.SettingsRepository
 import com.example.jabaviewer.data.settings.OrientationLock
 import com.example.jabaviewer.data.settings.ReaderMode
 import com.example.jabaviewer.data.storage.DocumentStorage
+import com.example.jabaviewer.core.AppConstants
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,7 @@ data class SettingsUiState(
     val keepScreenOn: Boolean = false,
     val orientationLock: OrientationLock = OrientationLock.SYSTEM,
     val decryptedCacheLimitMb: Int = 200,
+    val djvuConversionDpi: Int = AppConstants.DEFAULT_DJVU_CONVERSION_DPI,
     val message: String? = null,
 )
 
@@ -49,6 +51,7 @@ class SettingsViewModel @Inject constructor(
                     keepScreenOn = settings.keepScreenOn,
                     orientationLock = settings.orientationLock,
                     decryptedCacheLimitMb = settings.decryptedCacheLimitMb,
+                    djvuConversionDpi = settings.djvuConversionDpi,
                 )
             }
         }
@@ -103,6 +106,10 @@ class SettingsViewModel @Inject constructor(
 
     fun updateCacheLimit(limitMb: Int) {
         viewModelScope.launch { settingsRepository.updateDecryptedCacheLimitMb(limitMb) }
+    }
+
+    fun updateDjvuConversionDpi(dpi: Int) {
+        viewModelScope.launch { settingsRepository.updateDjvuConversionDpi(dpi) }
     }
 
     fun clearDecryptedCache() {

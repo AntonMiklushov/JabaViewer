@@ -10,6 +10,7 @@ import com.example.jabaviewer.data.settings.LibraryLayout
 import com.example.jabaviewer.data.settings.OrientationLock
 import com.example.jabaviewer.data.settings.ReaderMode
 import com.example.jabaviewer.data.settings.SortOrder
+import com.example.jabaviewer.core.DocumentFormat
 import com.example.jabaviewer.domain.model.LibraryItem
 import com.example.jabaviewer.ui.screens.library.LibraryViewModel
 import io.mockk.every
@@ -107,6 +108,7 @@ class LibraryViewModelTest {
             objectKey = "beta.pdf",
             size = 120,
             tags = listOf("beta", "guide"),
+            format = DocumentFormat.PDF,
             updatedAt = 2L,
             downloadState = DownloadState.DOWNLOADED,
             downloadProgress = 100,
@@ -118,6 +120,7 @@ class LibraryViewModelTest {
             objectKey = "alpha.pdf",
             size = 200,
             tags = listOf("history"),
+            format = DocumentFormat.PDF,
             updatedAt = 3L,
             downloadState = DownloadState.NOT_DOWNLOADED,
             downloadProgress = 0,
@@ -135,5 +138,6 @@ class LibraryViewModelTest {
         keepScreenOn = false,
         orientationLock = OrientationLock.SYSTEM,
         decryptedCacheLimitMb = 200,
+        djvuConversionDpi = 250,
     )
 }

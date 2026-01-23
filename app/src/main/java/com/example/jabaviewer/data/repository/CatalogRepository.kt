@@ -8,6 +8,7 @@ import com.example.jabaviewer.data.remote.CatalogRemoteSource
 import com.example.jabaviewer.data.remote.model.CatalogPayload
 import com.example.jabaviewer.data.security.PassphraseStore
 import com.example.jabaviewer.data.settings.SettingsDataStore
+import com.example.jabaviewer.core.DocumentFormat
 import com.squareup.moshi.JsonDataException
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +78,7 @@ class CatalogRepository @Inject constructor(
                 objectKey = item.objectKey,
                 size = item.size,
                 tags = item.tags.joinToString("|"),
+                format = DocumentFormat.fromRaw(item.format).id,
                 updatedAt = now,
             )
         }

@@ -1,6 +1,7 @@
 package com.example.jabaviewer.di
 
 import com.example.jabaviewer.BuildConfig
+import com.example.jabaviewer.data.remote.adapter.FlexibleStringAdapter
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import dagger.Module
@@ -35,6 +36,7 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideMoshi(): Moshi = Moshi.Builder()
+        .add(FlexibleStringAdapter())
         .add(KotlinJsonAdapterFactory())
         .build()
 }

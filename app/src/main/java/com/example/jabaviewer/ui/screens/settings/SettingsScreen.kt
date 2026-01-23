@@ -39,6 +39,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.jabaviewer.data.settings.OrientationLock
 import com.example.jabaviewer.data.settings.ReaderMode
+import com.example.jabaviewer.core.AppConstants
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 
@@ -54,6 +55,9 @@ fun SettingsScreen(
     var orientationMenu by remember { mutableStateOf(false) }
     var cacheLimit by remember(state.decryptedCacheLimitMb) {
         mutableFloatStateOf(state.decryptedCacheLimitMb.toFloat())
+    }
+    var djvuDpi by remember(state.djvuConversionDpi) {
+        mutableFloatStateOf(state.djvuConversionDpi.toFloat())
     }
 
     Scaffold(
@@ -98,6 +102,11 @@ fun SettingsScreen(
                     onKeepScreenOnChange = viewModel::updateKeepScreenOn,
                     onOrientationChange = viewModel::updateOrientationLock,
                 ),
+            )
+            DjvuSection(
+                dpi = djvuDpi,
+                onDpiChange = { djvuDpi = it },
+                onDpiCommit = { viewModel.updateDjvuConversionDpi(djvuDpi.toInt()) },
             )
             CacheSection(
                 cacheLimit = cacheLimit,
@@ -214,6 +223,31 @@ private fun ReaderSection(
 }
 
 @Composable
+private fun DjvuSection(
+    dpi: Float,
+    onDpiChange: (Float) -> Unit,
+    onDpiCommit: () -> Unit,
+) {
+    Text("DJVU", style = MaterialTheme.typography.titleLarge)
+    Text(
+        text = "Conversion quality: ${dpi.toInt()} DPI",
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    Text(
+        text = "Higher values improve quality but increase time and size.",
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Slider(
+        value = dpi,
+        onValueChange = onDpiChange,
+        onValueChangeFinished = onDpiCommit,
+        valueRange = AppConstants.MIN_DJVU_CONVERSION_DPI.toFloat()..AppConstants.MAX_DJVU_CONVERSION_DPI.toFloat(),
+        steps = DJVU_DPI_STEPS,
+    )
+}
+
+@Composable
 private fun CacheSection(
     cacheLimit: Float,
     onCacheLimitChange: (Float) -> Unit,
@@ -283,3 +317,6 @@ private data class ReaderSectionCallbacks(
     val onKeepScreenOnChange: (Boolean) -> Unit,
     val onOrientationChange: (OrientationLock) -> Unit,
 )
+
+private const val DJVU_DPI_STEPS =
+    (AppConstants.MAX_DJVU_CONVERSION_DPI - AppConstants.MIN_DJVU_CONVERSION_DPI) / 10 - 1

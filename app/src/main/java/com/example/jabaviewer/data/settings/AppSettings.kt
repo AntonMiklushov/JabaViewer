@@ -10,6 +10,7 @@ data class AppSettings(
     val keepScreenOn: Boolean,
     val orientationLock: OrientationLock,
     val decryptedCacheLimitMb: Int,
+    val djvuConversionDpi: Int,
 )
 
 enum class LibraryLayout { LIST, GRID }

@@ -25,6 +25,7 @@ ktlint = "11.6.1"
 mockk = "1.13.12"
 robolectric = "4.12.2"
 androidxTestCore = "1.6.1"
+djvulibre = "0.1.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -66,6 +67,7 @@ coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutin
 coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 android-pdf-viewer = { group = "com.github.mhiew", name = "AndroidPdfViewer", version.ref = "pdfViewer" }
+djvulibre = { group = "com.github.axet", name = "djvulibre", version.ref = "djvulibre" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }

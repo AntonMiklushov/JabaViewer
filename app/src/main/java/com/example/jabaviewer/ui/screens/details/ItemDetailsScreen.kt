@@ -39,6 +39,7 @@ import com.example.jabaviewer.ui.util.formatBytes
 import com.example.jabaviewer.ui.util.formatDate
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import com.example.jabaviewer.core.DocumentFormat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongMethod")
@@ -51,11 +52,18 @@ fun ItemDetailsScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val item = state.item
     val context = LocalContext.current
-    val createDocumentLauncher = rememberLauncherForActivityResult(
+    val createPdfLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
         if (uri != null) {
-            viewModel.saveDecryptedCopy(context.contentResolver, uri)
+            viewModel.saveDecryptedPdfCopy(context.contentResolver, uri)
+        }
+    }
+    val createDjvuLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("image/vnd.djvu")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.saveOriginalDjvuCopy(context.contentResolver, uri)
         }
     }
 
@@ -98,7 +106,11 @@ fun ItemDetailsScreen(
                     isRemoving = state.isRemoving,
                     callbacks = DetailsActionCallbacks(
                         onOpenReader = onOpenReader,
-                        onSave = { createDocumentLauncher.launch(buildPdfFileName(item.title)) },
+                        onSavePdf = { createPdfLauncher.launch(buildPdfFileName(item.title)) },
+                        onSaveOriginal = {
+                            createDjvuLauncher.launch(buildDjvuFileName(item.title))
+                        },
+                        onOpenExternal = { viewModel.openExternalDjvu(context) },
                         onRemove = { viewModel.removeDownload(onBack) },
                         onCancelDownload = viewModel::cancelDownload,
                         onDownload = viewModel::download,
@@ -143,6 +155,10 @@ private fun DetailsInfoCard(item: LibraryItem) {
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
+                text = "Format: ${item.format.label}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
                 text = "Last opened: ${formatDate(item.lastOpenedAt)}",
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -168,11 +184,27 @@ private fun DetailsActions(
                 Text("Open")
             }
             OutlinedButton(
-                onClick = callbacks.onSave,
+                onClick = callbacks.onSavePdf,
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isSaving,
             ) {
-                Text(if (isSaving) "Saving..." else "Decrypt save")
+                Text(if (isSaving) "Saving..." else "Export PDF")
+            }
+            if (item.format == DocumentFormat.DJVU) {
+                OutlinedButton(
+                    onClick = callbacks.onSaveOriginal,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSaving,
+                ) {
+                    Text(if (isSaving) "Saving..." else "Export DJVU")
+                }
+                OutlinedButton(
+                    onClick = callbacks.onOpenExternal,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSaving,
+                ) {
+                    Text("Open in External Viewer")
+                }
             }
             OutlinedButton(
                 onClick = callbacks.onRemove,
@@ -210,7 +242,7 @@ private fun DetailsFooter(
 ) {
     Spacer(modifier = Modifier.height(12.dp))
     Text(
-        text = "Downloads stay encrypted on disk. PDFs are decrypted only when opened.",
+        text = "Downloads stay encrypted on disk. PDFs/DJVU are decrypted only when opened.",
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -224,7 +256,9 @@ private fun DetailsFooter(
 
 private data class DetailsActionCallbacks(
     val onOpenReader: () -> Unit,
-    val onSave: () -> Unit,
+    val onSavePdf: () -> Unit,
+    val onSaveOriginal: () -> Unit,
+    val onOpenExternal: () -> Unit,
     val onRemove: () -> Unit,
     val onCancelDownload: () -> Unit,
     val onDownload: () -> Unit,
@@ -234,4 +268,15 @@ private fun buildPdfFileName(title: String): String {
     val base = title.trim().ifBlank { "document" }
     val sanitized = base.replace(Regex("[\\\\/:*?\"<>|]"), "_")
     return if (sanitized.lowercase().endsWith(".pdf")) sanitized else "$sanitized.pdf"
+}
+
+private fun buildDjvuFileName(title: String): String {
+    val base = title.trim().ifBlank { "document" }
+    val sanitized = base.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+    val lower = sanitized.lowercase()
+    return if (lower.endsWith(".djvu") || lower.endsWith(".djv")) {
+        sanitized
+    } else {
+        "$sanitized.djvu"
+    }
 }

@@ -11,6 +11,7 @@ class DocumentStorage @Inject constructor(
 ) {
     private val encryptedRoot = File(context.filesDir, "remote/${AppConstants.REMOTE_ID}")
     private val decryptedRoot = File(context.noBackupFilesDir, "decrypted_cache/${AppConstants.REMOTE_ID}")
+    private val shareRoot = File(context.cacheDir, "share/${AppConstants.REMOTE_ID}")
 
     fun encryptedFileFor(objectKey: String): File {
         val safeKey = sanitizeKey(objectKey)
@@ -26,6 +27,26 @@ class DocumentStorage @Inject constructor(
             dir.mkdirs()
         }
         return File(dir, "document.pdf")
+    }
+
+    fun createTempDecryptedFile(itemId: String, extension: String): File {
+        val safeId = sanitizeKey(itemId)
+        val dir = File(decryptedRoot, safeId)
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        val safeExt = extension.trim().trimStart('.').ifBlank { "bin" }
+        return File.createTempFile("source_", ".$safeExt", dir)
+    }
+
+    fun createShareFile(itemId: String, extension: String): File {
+        val safeId = sanitizeKey(itemId)
+        val dir = File(shareRoot, safeId)
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        val safeExt = extension.trim().trimStart('.').ifBlank { "bin" }
+        return File.createTempFile("share_", ".$safeExt", dir)
     }
 
     fun clearDecryptedCache() {

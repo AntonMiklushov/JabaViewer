@@ -4,6 +4,7 @@ import com.example.jabaviewer.data.local.dao.CatalogDao
 import com.example.jabaviewer.data.local.dao.LocalDocumentDao
 import com.example.jabaviewer.data.local.entities.DownloadState
 import com.example.jabaviewer.data.local.entities.LocalDocumentEntity
+import com.example.jabaviewer.core.DocumentFormat
 import com.example.jabaviewer.domain.model.LibraryItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -24,6 +25,7 @@ class LibraryRepository @Inject constructor(
                     objectKey = pair.item.objectKey,
                     size = pair.item.size,
                     tags = pair.item.tags.split("|").filter { it.isNotBlank() },
+                    format = DocumentFormat.fromRaw(pair.item.format),
                     updatedAt = pair.item.updatedAt,
                     downloadState = local?.downloadState ?: DownloadState.NOT_DOWNLOADED,
                     downloadProgress = local?.downloadProgress ?: 0,

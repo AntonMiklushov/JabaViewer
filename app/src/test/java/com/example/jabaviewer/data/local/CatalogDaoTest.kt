@@ -47,6 +47,7 @@ class CatalogDaoTest {
                 objectKey = "first.pdf",
                 size = 100,
                 tags = "tag",
+                format = "pdf",
                 updatedAt = 1L,
             )
         )
@@ -65,6 +66,7 @@ class CatalogDaoTest {
                 objectKey = "second.pdf",
                 size = 200,
                 tags = "tag2",
+                format = "pdf",
                 updatedAt = 2L,
             )
         )
