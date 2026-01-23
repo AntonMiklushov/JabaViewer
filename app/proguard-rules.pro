@@ -26,3 +26,7 @@
 # Moshi uses generated JsonAdapter classes discovered by name.
 -keep class **JsonAdapter { *; }
 -keep class **JsonAdapter$* { *; }
+
+# Keep Moshi-reflected catalog DTOs from R8 class merging/obfuscation.
+-keep class com.example.jabaviewer.data.remote.model.CatalogPayload { *; }
+-keep class com.example.jabaviewer.data.remote.model.CatalogItemPayload { *; }
