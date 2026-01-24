@@ -86,11 +86,7 @@ class ItemDetailsViewModel @Inject constructor(
                 if (encryptedFile.exists()) {
                     encryptedFile.delete()
                 }
-                val decryptedFile = storage.decryptedFileFor(item.id)
-                if (decryptedFile.exists()) {
-                    decryptedFile.delete()
-                    decryptedFile.parentFile?.takeIf { it.listFiles().isNullOrEmpty() }?.delete()
-                }
+                storage.deleteDecryptedFiles(item.id)
             }
             libraryRepository.clearDownloadState(item.id)
             libraryRepository.updateReadingState(
@@ -118,6 +114,9 @@ class ItemDetailsViewModel @Inject constructor(
                         formatHint = item.format,
                         targetDpi = djvuConversionDpi,
                     )
+                    if (prepared.format != item.format) {
+                        libraryRepository.updateCatalogItemFormat(item.id, prepared.format)
+                    }
                     writeDecryptedCopy(contentResolver, targetUri, prepared.file)
                     if (prepared.wasCreated) {
                         prepared.file.delete()

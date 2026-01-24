@@ -29,6 +29,48 @@ class DjvuConverter @Inject constructor() {
         }
     }
 
+    fun openDocument(inputFile: File): DjvuDocument {
+        val stream = FileInputStream(inputFile)
+        return runCatching { DjvuLibre(stream.fd) }
+            .map { djvu -> DjvuDocument(djvu, stream) }
+            .getOrElse { error ->
+                stream.close()
+                throw error
+            }
+    }
+
+    fun getPageCount(document: DjvuDocument): Int = document.djvu.getPagesCount()
+
+    fun getPageInfo(document: DjvuDocument, pageIndex: Int): DjvuPageInfo {
+        val info = document.djvu.getPageInfo(pageIndex)
+        return DjvuPageInfo(
+            width = info.width,
+            height = info.height,
+            dpi = info.dpi,
+        )
+    }
+
+    fun renderPage(
+        document: DjvuDocument,
+        pageIndex: Int,
+        targetWidthPx: Int,
+    ): Bitmap {
+        var width = targetWidthPx.coerceAtLeast(1)
+        var attempt = 0
+        val pageInfo = document.djvu.getPageInfo(pageIndex)
+        while (true) {
+            try {
+                return renderPageBitmap(document.djvu, pageIndex, pageInfo, width)
+            } catch (oom: OutOfMemoryError) {
+                if (attempt > 0) {
+                    throw oom
+                }
+                width = (width * DPI_FALLBACK_RATIO).roundToInt().coerceAtLeast(1)
+                attempt += 1
+            }
+        }
+    }
+
     private fun openDjvu(stream: FileInputStream): DjvuLibre {
         return try {
             DjvuLibre(stream.fd)
@@ -120,6 +162,32 @@ class DjvuConverter @Inject constructor() {
         }
     }
 
+    private fun renderPageBitmap(
+        djvu: DjvuLibre,
+        pageIndex: Int,
+        pageInfo: DjvuLibre.Page,
+        targetWidthPx: Int,
+    ): Bitmap {
+        val width = targetWidthPx.coerceAtLeast(1)
+        val sourceWidth = pageInfo.width.takeIf { it > 0 } ?: width
+        val scale = width.toFloat() / sourceWidth.toFloat()
+        val height = (pageInfo.height * scale).roundToInt().coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        djvu.renderPage(
+            bitmap,
+            pageIndex,
+            0,
+            0,
+            pageInfo.width,
+            pageInfo.height,
+            0,
+            0,
+            width,
+            height,
+        )
+        return bitmap
+    }
+
     private companion object {
         private const val POINTS_PER_INCH = 72f
         private const val DEFAULT_TARGET_DPI = AppConstants.DEFAULT_DJVU_CONVERSION_DPI
@@ -127,3 +195,19 @@ class DjvuConverter @Inject constructor() {
         private const val DPI_FALLBACK_RATIO = 0.75f
     }
 }
+
+data class DjvuDocument internal constructor(
+    internal val djvu: DjvuLibre,
+    private val stream: FileInputStream,
+) : AutoCloseable {
+    override fun close() {
+        djvu.close()
+        stream.close()
+    }
+}
+
+data class DjvuPageInfo(
+    val width: Int,
+    val height: Int,
+    val dpi: Int,
+)

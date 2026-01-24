@@ -71,14 +71,21 @@ class CatalogRepository @Inject constructor(
 
     private suspend fun persistCatalog(payload: CatalogPayload) {
         val now = System.currentTimeMillis()
+        val existingFormats = catalogDao.getItemFormats()
+            .associate { entry -> entry.id to entry.format }
         val entities = payload.items.map { item ->
+            val existing = existingFormats[item.id]?.let { DocumentFormat.fromRawOrNull(it) }
+            val format = DocumentFormat.fromRawOrNull(item.format)
+                ?: DocumentFormat.fromFileName(item.objectKey)
+                ?: existing
+                ?: DocumentFormat.PDF
             CatalogItemEntity(
                 id = item.id,
                 title = item.title,
                 objectKey = item.objectKey,
                 size = item.size,
                 tags = item.tags.joinToString("|"),
-                format = DocumentFormat.fromRaw(item.format).id,
+                format = format.id,
                 updatedAt = now,
             )
         }

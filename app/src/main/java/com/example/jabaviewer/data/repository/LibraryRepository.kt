@@ -38,6 +38,10 @@ class LibraryRepository @Inject constructor(
 
     suspend fun getLocalDocument(itemId: String) = localDocumentDao.getLocalDocument(itemId)
 
+    suspend fun updateCatalogItemFormat(itemId: String, format: DocumentFormat) {
+        catalogDao.updateFormat(itemId, format.id)
+    }
+
     suspend fun upsertLocalDocument(entity: LocalDocumentEntity) {
         localDocumentDao.upsert(entity)
     }

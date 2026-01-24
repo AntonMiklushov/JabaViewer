@@ -13,12 +13,25 @@ enum class DocumentFormat(
 
     companion object {
         fun fromRaw(value: String?): DocumentFormat {
+            return fromRawOrNull(value) ?: PDF
+        }
+
+        fun fromRawOrNull(value: String?): DocumentFormat? {
             val normalized = value?.trim()?.lowercase()
             return when (normalized) {
                 "djvu", "djv" -> DJVU
                 "pdf" -> PDF
-                else -> PDF
+                else -> null
             }
+        }
+
+        fun fromFileName(value: String?): DocumentFormat? {
+            val extension = value
+                ?.substringAfterLast('.', "")
+                ?.trim()
+                ?.lowercase()
+                ?.takeIf { it.isNotBlank() }
+            return fromRawOrNull(extension)
         }
     }
 }
@@ -51,10 +64,10 @@ private fun looksLikePdf(bytes: ByteArray): Boolean {
 }
 
 private fun looksLikeDjvu(bytes: ByteArray): Boolean {
-    return hasAsciiSignature(bytes, "AT&TFORM", 32) ||
-        hasAsciiSignature(bytes, "DJVU", 64) ||
-        hasAsciiSignature(bytes, "DJVM", 64) ||
-        hasAsciiSignature(bytes, "DJVI", 64)
+    val hasForm = hasAsciiSignature(bytes, "AT&TFORM", 64)
+    val hasDjvu = hasAsciiSignature(bytes, "DJVU", 64) ||
+        hasAsciiSignature(bytes, "DJVM", 64)
+    return hasForm && hasDjvu
 }
 
 private fun hasAsciiSignature(bytes: ByteArray, signature: String, maxBytes: Int): Boolean {

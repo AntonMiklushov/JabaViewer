@@ -39,7 +39,7 @@ Catalog JSON must include `version`, `baseUrl`, and `items[]` with fields like `
 
 ## Storage Model
 - Encrypted downloads: `files/remote/default/<objectKey>`
-- Decrypted cache (on-demand): `no_backup/decrypted_cache/default/<itemId>/document.pdf`
+- Decrypted cache (on-demand): `no_backup/decrypted_cache/default/<itemId>/document.<ext>` (DjVu uses `document.djvu`)
 - Decrypted cache is cleared via Settings and pruned to the configured size limit.
 
 ## Reader Notes

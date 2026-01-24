@@ -64,6 +64,7 @@ import kotlin.math.roundToInt
 fun ReaderScreen(
     itemId: String,
     onBack: () -> Unit,
+    onOpenDjvu: () -> Unit,
     viewModel: ReaderViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -147,6 +148,7 @@ fun ReaderScreen(
             onConvert = viewModel::convertPendingDjvu,
             onSave = { saveDjvuLauncher.launch(buildDjvuFileName(state.title)) },
             onOpenExternal = { viewModel.openExternalDjvu(context) },
+            onViewDjvu = onOpenDjvu,
             onCancel = onBack,
         )
         ReaderContent(
@@ -470,7 +472,7 @@ private fun DjvuActionDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "This DJVU file must be converted to PDF to view inside the app.",
+                    text = "View DjVu in-app or convert to PDF.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 model.errorMessage?.let { message ->
@@ -482,6 +484,9 @@ private fun DjvuActionDialog(
                 }
                 OutlinedButton(onClick = callbacks.onConvert, modifier = Modifier.fillMaxWidth()) {
                     Text("Convert to PDF")
+                }
+                OutlinedButton(onClick = callbacks.onViewDjvu, modifier = Modifier.fillMaxWidth()) {
+                    Text("View DjVu")
                 }
                 OutlinedButton(onClick = callbacks.onSave, modifier = Modifier.fillMaxWidth()) {
                     Text("Decrypt & Save DJVU")
@@ -532,6 +537,7 @@ private data class DjvuActionCallbacks(
     val onConvert: () -> Unit,
     val onSave: () -> Unit,
     val onOpenExternal: () -> Unit,
+    val onViewDjvu: () -> Unit,
     val onCancel: () -> Unit,
 )
 

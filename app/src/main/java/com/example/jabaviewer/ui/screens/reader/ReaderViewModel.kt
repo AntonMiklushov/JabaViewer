@@ -181,7 +181,7 @@ class ReaderViewModel @Inject constructor(
         val encryptedFile = local?.encryptedFilePath?.let { File(it) }
             ?: dependencies.storage.encryptedFileFor(item.objectKey)
         check(encryptedFile.exists()) { "Document is not downloaded" }
-        val decryptedFile = dependencies.storage.decryptedFileFor(item.id)
+        val decryptedFile = dependencies.storage.decryptedFileFor(item.id, DocumentFormat.PDF)
         val format = DocumentFormat.fromRaw(item.format)
         val isCachedPdf = decryptedFile.exists() &&
             isPdfValid(decryptedFile) &&
@@ -190,15 +190,18 @@ class ReaderViewModel @Inject constructor(
             return@withContext LoadResult.NeedsDjvuAction(item, local, encryptedFile)
         }
         if (!isCachedPdf) {
-            updateLoadingMessage(
-                "Decrypting PDF..."
-            )
-            dependencies.documentPreparer.preparePdf(
+            withContext(Dispatchers.Main) {
+                _uiState.value = _uiState.value.copy(loadingMessage = "Decrypting PDF...")
+            }
+            val prepared = dependencies.documentPreparer.preparePdf(
                 encryptedFile = encryptedFile,
                 itemId = item.id,
                 formatHint = format,
                 targetDpi = djvuConversionDpi,
             )
+            if (prepared.format != format) {
+                dependencies.libraryRepository.updateCatalogItemFormat(item.id, prepared.format)
+            }
         }
         decryptedFile.setLastModified(System.currentTimeMillis())
         val evicted = dependencies.cacheManager.pruneCache(
@@ -232,12 +235,6 @@ class ReaderViewModel @Inject constructor(
         )
     }
 
-    private suspend fun updateLoadingMessage(message: String) {
-        withContext(Dispatchers.Main) {
-            _uiState.value = _uiState.value.copy(loadingMessage = message)
-        }
-    }
-
     fun convertPendingDjvu() {
         val pending = pendingDjvu ?: return
         viewModelScope.launch {
@@ -248,21 +245,37 @@ class ReaderViewModel @Inject constructor(
                 djvuActionError = null,
                 errorMessage = null,
             )
-            try {
-                val decryptedFile = dependencies.storage.decryptedFileFor(pending.item.id)
-                dependencies.documentPreparer.preparePdf(
-                    encryptedFile = pending.encryptedFile,
-                    itemId = pending.item.id,
-                    formatHint = DocumentFormat.DJVU,
-                    targetDpi = djvuConversionDpi,
-                )
-                decryptedFile.setLastModified(System.currentTimeMillis())
-                val evicted = dependencies.cacheManager.pruneCache(
-                    cacheLimitMb,
-                    protectedFiles = setOf(decryptedFile),
-                )
-                applyLoadedDocument(LoadedDocument(pending.item, pending.local, decryptedFile, evicted))
-            } catch (error: AEADBadTagException) {
+            val result = runCatching { convertPendingDjvuInternal(pending) }
+            result.onSuccess { loaded -> applyLoadedDocument(loaded) }
+                .onFailure { error -> handleDjvuConversionError(error) }
+        }
+    }
+
+    private suspend fun convertPendingDjvuInternal(pending: PendingDjvu): LoadedDocument {
+        val decryptedFile = dependencies.storage.decryptedFileFor(pending.item.id, DocumentFormat.PDF)
+        val prepared = dependencies.documentPreparer.preparePdf(
+            encryptedFile = pending.encryptedFile,
+            itemId = pending.item.id,
+            formatHint = DocumentFormat.DJVU,
+            targetDpi = djvuConversionDpi,
+        )
+        if (prepared.format != DocumentFormat.DJVU) {
+            dependencies.libraryRepository.updateCatalogItemFormat(pending.item.id, prepared.format)
+        }
+        decryptedFile.setLastModified(System.currentTimeMillis())
+        val evicted = dependencies.cacheManager.pruneCache(
+            cacheLimitMb,
+            protectedFiles = setOf(decryptedFile),
+        )
+        return LoadedDocument(pending.item, pending.local, decryptedFile, evicted)
+    }
+
+    private fun handleDjvuConversionError(error: Throwable) {
+        if (error is kotlinx.coroutines.CancellationException) {
+            throw error
+        }
+        when (error) {
+            is AEADBadTagException -> {
                 Log.e(TAG, "Failed to convert DJVU: bad tag", error)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -270,7 +283,8 @@ class ReaderViewModel @Inject constructor(
                     requiresDjvuAction = true,
                     djvuActionError = "Wrong passphrase or corrupted file",
                 )
-            } catch (error: IllegalStateException) {
+            }
+            is IllegalStateException -> {
                 Log.e(TAG, "Failed to convert DJVU: state", error)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -278,7 +292,8 @@ class ReaderViewModel @Inject constructor(
                     requiresDjvuAction = true,
                     djvuActionError = error.message ?: "Failed to convert DJVU",
                 )
-            } catch (error: java.io.IOException) {
+            }
+            is java.io.IOException -> {
                 Log.e(TAG, "Failed to convert DJVU: IO", error)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -286,8 +301,18 @@ class ReaderViewModel @Inject constructor(
                     requiresDjvuAction = true,
                     djvuActionError = error.message ?: "Failed to convert DJVU",
                 )
-            } catch (error: SecurityException) {
+            }
+            is SecurityException -> {
                 Log.e(TAG, "Failed to convert DJVU: security", error)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    loadingMessage = null,
+                    requiresDjvuAction = true,
+                    djvuActionError = error.message ?: "Failed to convert DJVU",
+                )
+            }
+            else -> {
+                Log.e(TAG, "Failed to convert DJVU", error)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     loadingMessage = null,
@@ -422,21 +447,6 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    private fun writeDecryptedCopy(
-        contentResolver: android.content.ContentResolver,
-        targetUri: android.net.Uri,
-        decryptedFile: File,
-    ) {
-        val outputStream = contentResolver.openOutputStream(targetUri)
-        checkNotNull(outputStream) { "Unable to open destination" }
-        outputStream.use { output ->
-            decryptedFile.inputStream().use { input ->
-                input.copyTo(output)
-                output.flush()
-            }
-        }
-    }
-
     private data class LoadedDocument(
         val item: CatalogItemEntity,
         val local: LocalDocumentEntity?,
@@ -462,6 +472,21 @@ class ReaderViewModel @Inject constructor(
     private companion object {
         private const val PAGE_COUNT_UNKNOWN = 0
         private const val TAG = "ReaderViewModel"
+    }
+}
+
+private fun writeDecryptedCopy(
+    contentResolver: android.content.ContentResolver,
+    targetUri: android.net.Uri,
+    decryptedFile: File,
+) {
+    val outputStream = contentResolver.openOutputStream(targetUri)
+    checkNotNull(outputStream) { "Unable to open destination" }
+    outputStream.use { output ->
+        decryptedFile.inputStream().use { input ->
+            input.copyTo(output)
+            output.flush()
+        }
     }
 }
 

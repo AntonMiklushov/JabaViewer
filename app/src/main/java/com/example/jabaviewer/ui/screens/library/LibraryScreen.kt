@@ -64,7 +64,7 @@ import androidx.compose.material.icons.outlined.Settings
 @Composable
 fun LibraryScreen(
     onOpenDetails: (String) -> Unit,
-    onOpenReader: (String) -> Unit,
+    onOpenDocument: (LibraryItem) -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
@@ -91,7 +91,7 @@ fun LibraryScreen(
         ) {
             val contentCallbacks = rememberLibraryContentCallbacks(
                 onOpenDetails = onOpenDetails,
-                onOpenReader = onOpenReader,
+                onOpenDocument = onOpenDocument,
                 onDownload = viewModel::downloadItem,
                 onCancel = viewModel::cancelDownload,
                 onSearch = viewModel::updateSearch,
@@ -178,14 +178,14 @@ private fun LibraryContent(
             LibraryLayout.LIST -> LibraryList(
                 items = state.items,
                 onItemClick = callbacks.onOpenDetails,
-                onOpenReader = callbacks.onOpenReader,
+                onOpenDocument = callbacks.onOpenDocument,
                 onDownload = callbacks.onDownload,
                 onCancel = callbacks.onCancel,
             )
             LibraryLayout.GRID -> LibraryGrid(
                 items = state.items,
                 onItemClick = callbacks.onOpenDetails,
-                onOpenReader = callbacks.onOpenReader,
+                onOpenDocument = callbacks.onOpenDocument,
                 onDownload = callbacks.onDownload,
                 onCancel = callbacks.onCancel,
             )
@@ -203,7 +203,7 @@ private fun LibraryContent(
 
 private data class LibraryContentCallbacks(
     val onOpenDetails: (String) -> Unit,
-    val onOpenReader: (String) -> Unit,
+    val onOpenDocument: (LibraryItem) -> Unit,
     val onDownload: (String) -> Unit,
     val onCancel: (String) -> Unit,
     val onSearch: (String) -> Unit,
@@ -216,7 +216,7 @@ private data class LibraryContentCallbacks(
 @Composable
 private fun rememberLibraryContentCallbacks(
     onOpenDetails: (String) -> Unit,
-    onOpenReader: (String) -> Unit,
+    onOpenDocument: (LibraryItem) -> Unit,
     onDownload: (String) -> Unit,
     onCancel: (String) -> Unit,
     onSearch: (String) -> Unit,
@@ -226,7 +226,7 @@ private fun rememberLibraryContentCallbacks(
 ): LibraryContentCallbacks {
     return remember(
         onOpenDetails,
-        onOpenReader,
+        onOpenDocument,
         onDownload,
         onCancel,
         onSearch,
@@ -236,7 +236,7 @@ private fun rememberLibraryContentCallbacks(
     ) {
         LibraryContentCallbacks(
             onOpenDetails = onOpenDetails,
-            onOpenReader = onOpenReader,
+            onOpenDocument = onOpenDocument,
             onDownload = onDownload,
             onCancel = onCancel,
             onSearch = onSearch,
@@ -315,7 +315,7 @@ private fun SortRow(
 private fun LibraryList(
     items: List<LibraryItem>,
     onItemClick: (String) -> Unit,
-    onOpenReader: (String) -> Unit,
+    onOpenDocument: (LibraryItem) -> Unit,
     onDownload: (String) -> Unit,
     onCancel: (String) -> Unit,
 ) {
@@ -326,7 +326,7 @@ private fun LibraryList(
             LibraryItemCard(
                 item = item,
                 onClick = { onItemClick(item.id) },
-                onOpenReader = { onOpenReader(item.id) },
+                onOpenDocument = { onOpenDocument(item) },
                 onDownload = { onDownload(item.id) },
                 onCancel = { onCancel(item.id) },
             )
@@ -338,7 +338,7 @@ private fun LibraryList(
 private fun LibraryGrid(
     items: List<LibraryItem>,
     onItemClick: (String) -> Unit,
-    onOpenReader: (String) -> Unit,
+    onOpenDocument: (LibraryItem) -> Unit,
     onDownload: (String) -> Unit,
     onCancel: (String) -> Unit,
 ) {
@@ -351,7 +351,7 @@ private fun LibraryGrid(
             LibraryItemCard(
                 item = item,
                 onClick = { onItemClick(item.id) },
-                onOpenReader = { onOpenReader(item.id) },
+                onOpenDocument = { onOpenDocument(item) },
                 onDownload = { onDownload(item.id) },
                 onCancel = { onCancel(item.id) },
             )
@@ -363,7 +363,7 @@ private fun LibraryGrid(
 private fun LibraryItemCard(
     item: LibraryItem,
     onClick: () -> Unit,
-    onOpenReader: () -> Unit,
+    onOpenDocument: () -> Unit,
     onDownload: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -390,7 +390,7 @@ private fun LibraryItemCard(
             LibraryItemActions(
                 downloadState = item.downloadState,
                 progress = item.downloadProgress,
-                onOpenReader = onOpenReader,
+                onOpenDocument = onOpenDocument,
                 onCancel = onCancel,
                 onDownload = onDownload,
             )
@@ -419,13 +419,13 @@ private fun LibraryItemTags(tags: List<String>) {
 private fun LibraryItemActions(
     downloadState: DownloadState,
     progress: Int,
-    onOpenReader: () -> Unit,
+    onOpenDocument: () -> Unit,
     onCancel: () -> Unit,
     onDownload: () -> Unit,
 ) {
     when (downloadState) {
         DownloadState.DOWNLOADED -> {
-            Button(onClick = onOpenReader, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = onOpenDocument, modifier = Modifier.fillMaxWidth()) {
                 Text("Open")
             }
         }

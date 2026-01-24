@@ -19,8 +19,14 @@ interface CatalogDao {
     @Query("SELECT * FROM catalog_items WHERE id = :itemId")
     suspend fun getCatalogItem(itemId: String): CatalogItemEntity?
 
+    @Query("SELECT id, format FROM catalog_items")
+    suspend fun getItemFormats(): List<CatalogItemFormat>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertItems(items: List<CatalogItemEntity>)
+
+    @Query("UPDATE catalog_items SET format = :format WHERE id = :itemId")
+    suspend fun updateFormat(itemId: String, format: String)
 
     @Query("DELETE FROM catalog_items")
     suspend fun clearItems()
@@ -45,3 +51,8 @@ interface CatalogDao {
         upsertMetadata(metadata)
     }
 }
+
+data class CatalogItemFormat(
+    val id: String,
+    val format: String,
+)

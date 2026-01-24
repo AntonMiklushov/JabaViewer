@@ -2,6 +2,7 @@ package com.example.jabaviewer.data.storage
 
 import android.content.Context
 import com.example.jabaviewer.core.AppConstants
+import com.example.jabaviewer.core.DocumentFormat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
@@ -20,13 +21,37 @@ class DocumentStorage @Inject constructor(
         return file
     }
 
-    fun decryptedFileFor(itemId: String): File {
+    fun decryptedFileFor(
+        itemId: String,
+        format: DocumentFormat = DocumentFormat.PDF,
+    ): File {
+        val dir = decryptedDirFor(itemId)
+        val file = File(dir, "document.${format.extension}")
+        return if (format == DocumentFormat.PDF) {
+            val legacy = File(dir, "document.pdf")
+            if (legacy.exists()) legacy else file
+        } else {
+            file
+        }
+    }
+
+    fun decryptedDirFor(itemId: String): File {
         val safeId = sanitizeKey(itemId)
         val dir = File(decryptedRoot, safeId)
         if (!dir.exists()) {
             dir.mkdirs()
         }
-        return File(dir, "document.pdf")
+        return dir
+    }
+
+    fun deleteDecryptedFiles(itemId: String) {
+        val dir = decryptedDirFor(itemId)
+        if (dir.exists()) {
+            dir.listFiles()?.forEach { it.delete() }
+            if (dir.listFiles().isNullOrEmpty()) {
+                dir.delete()
+            }
+        }
     }
 
     fun createTempDecryptedFile(itemId: String, extension: String): File {

@@ -17,11 +17,18 @@ import javax.inject.Inject
 data class PreparedPdf(
     val file: File,
     val wasCreated: Boolean,
+    val format: DocumentFormat,
 )
 
 data class PreparedOriginal(
     val file: File,
     val format: DocumentFormat,
+)
+
+data class PreparedDocument(
+    val file: File,
+    val format: DocumentFormat,
+    val wasCreated: Boolean,
 )
 
 class DocumentPreparer @Inject constructor(
@@ -36,12 +43,12 @@ class DocumentPreparer @Inject constructor(
         formatHint: DocumentFormat,
         targetDpi: Int = DEFAULT_TARGET_DPI,
     ): PreparedPdf = withContext(Dispatchers.IO) {
-        val outputFile = storage.decryptedFileFor(itemId)
+        val outputFile = storage.decryptedFileFor(itemId, DocumentFormat.PDF)
         val upToDate = outputFile.exists() &&
             isPdfValid(outputFile) &&
             outputFile.lastModified() >= encryptedFile.lastModified()
         if (upToDate) {
-            return@withContext PreparedPdf(outputFile, wasCreated = false)
+            return@withContext PreparedPdf(outputFile, wasCreated = false, format = formatHint)
         }
 
         if (outputFile.exists()) {
@@ -49,10 +56,12 @@ class DocumentPreparer @Inject constructor(
         }
 
         val tempFile = storage.createTempDecryptedFile(itemId, formatHint.extension)
+        var detectedFormat = formatHint
         try {
             decryptToFile(encryptedFile, tempFile)
             val detected = detectDocumentFormat(tempFile)
                 ?: error("Unsupported or corrupted document")
+            detectedFormat = detected
             when (detected) {
                 DocumentFormat.PDF -> moveOrCopy(tempFile, outputFile)
                 DocumentFormat.DJVU -> {
@@ -65,7 +74,7 @@ class DocumentPreparer @Inject constructor(
             tempFile.delete()
         }
         outputFile.setLastModified(System.currentTimeMillis())
-        return@withContext PreparedPdf(outputFile, wasCreated = true)
+        return@withContext PreparedPdf(outputFile, wasCreated = true, format = detectedFormat)
     }
 
     suspend fun decryptOriginal(
@@ -108,6 +117,40 @@ class DocumentPreparer @Inject constructor(
                 shareFile.delete()
             }
         }
+    }
+
+    suspend fun prepareDecryptedDocument(
+        encryptedFile: File,
+        itemId: String,
+        formatHint: DocumentFormat,
+    ): PreparedDocument = withContext(Dispatchers.IO) {
+        val outputFile = storage.decryptedFileFor(itemId, formatHint)
+        val upToDate = outputFile.exists() &&
+            outputFile.lastModified() >= encryptedFile.lastModified() &&
+            detectDocumentFormat(outputFile) == formatHint
+        if (upToDate) {
+            return@withContext PreparedDocument(outputFile, formatHint, wasCreated = false)
+        }
+
+        if (outputFile.exists()) {
+            outputFile.delete()
+        }
+
+        val tempFile = storage.createTempDecryptedFile(itemId, formatHint.extension)
+        var detectedFormat = formatHint
+        val resolvedFile: File
+        try {
+            decryptToFile(encryptedFile, tempFile)
+            detectedFormat = detectDocumentFormat(tempFile)
+                ?: error("Unsupported or corrupted document")
+            resolvedFile = storage.decryptedFileFor(itemId, detectedFormat)
+            moveOrCopy(tempFile, resolvedFile)
+            check(resolvedFile.exists()) { "Failed to prepare document" }
+        } finally {
+            tempFile.delete()
+        }
+        resolvedFile.setLastModified(System.currentTimeMillis())
+        return@withContext PreparedDocument(resolvedFile, detectedFormat, wasCreated = true)
     }
 
     private fun moveOrCopy(source: File, destination: File) {

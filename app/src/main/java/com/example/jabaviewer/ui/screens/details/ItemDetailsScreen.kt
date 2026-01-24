@@ -47,6 +47,7 @@ import com.example.jabaviewer.core.DocumentFormat
 fun ItemDetailsScreen(
     onBack: () -> Unit,
     onOpenReader: () -> Unit,
+    onOpenDjvu: () -> Unit,
     viewModel: ItemDetailsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -105,7 +106,8 @@ fun ItemDetailsScreen(
                     isSaving = state.isSaving,
                     isRemoving = state.isRemoving,
                     callbacks = DetailsActionCallbacks(
-                        onOpenReader = onOpenReader,
+                        onOpenReader = if (item.format == DocumentFormat.DJVU) onOpenDjvu else onOpenReader,
+                        onViewDjvu = onOpenDjvu,
                         onSavePdf = { createPdfLauncher.launch(buildPdfFileName(item.title)) },
                         onSaveOriginal = {
                             createDjvuLauncher.launch(buildDjvuFileName(item.title))
@@ -191,20 +193,10 @@ private fun DetailsActions(
                 Text(if (isSaving) "Saving..." else "Export PDF")
             }
             if (item.format == DocumentFormat.DJVU) {
-                OutlinedButton(
-                    onClick = callbacks.onSaveOriginal,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isSaving,
-                ) {
-                    Text(if (isSaving) "Saving..." else "Export DJVU")
-                }
-                OutlinedButton(
-                    onClick = callbacks.onOpenExternal,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isSaving,
-                ) {
-                    Text("Open in External Viewer")
-                }
+                DjvuDetailsActions(
+                    isSaving = isSaving,
+                    callbacks = callbacks,
+                )
             }
             OutlinedButton(
                 onClick = callbacks.onRemove,
@@ -236,6 +228,34 @@ private fun DetailsActions(
 }
 
 @Composable
+private fun DjvuDetailsActions(
+    isSaving: Boolean,
+    callbacks: DetailsActionCallbacks,
+) {
+    OutlinedButton(
+        onClick = callbacks.onViewDjvu,
+        modifier = Modifier.fillMaxWidth(),
+        enabled = !isSaving,
+    ) {
+        Text("View DjVu")
+    }
+    OutlinedButton(
+        onClick = callbacks.onSaveOriginal,
+        modifier = Modifier.fillMaxWidth(),
+        enabled = !isSaving,
+    ) {
+        Text(if (isSaving) "Saving..." else "Export DJVU")
+    }
+    OutlinedButton(
+        onClick = callbacks.onOpenExternal,
+        modifier = Modifier.fillMaxWidth(),
+        enabled = !isSaving,
+    ) {
+        Text("Open in External Viewer")
+    }
+}
+
+@Composable
 private fun DetailsFooter(
     errorMessage: String?,
     message: String?,
@@ -256,6 +276,7 @@ private fun DetailsFooter(
 
 private data class DetailsActionCallbacks(
     val onOpenReader: () -> Unit,
+    val onViewDjvu: () -> Unit,
     val onSavePdf: () -> Unit,
     val onSaveOriginal: () -> Unit,
     val onOpenExternal: () -> Unit,
