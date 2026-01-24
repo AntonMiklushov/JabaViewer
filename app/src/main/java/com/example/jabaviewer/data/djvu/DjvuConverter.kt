@@ -17,7 +17,6 @@ class DjvuConverter @Inject constructor() {
         outputFile: File,
         targetDpi: Int = DEFAULT_TARGET_DPI,
     ) {
-        ensureRenderSupport()
         require(targetDpi > 0) { "Target DPI must be positive" }
         outputFile.parentFile?.mkdirs()
         FileInputStream(inputFile).use { stream ->
@@ -56,7 +55,6 @@ class DjvuConverter @Inject constructor() {
         pageIndex: Int,
         targetWidthPx: Int,
     ): Bitmap {
-        ensureRenderSupport()
         var width = targetWidthPx.coerceAtLeast(1)
         var attempt = 0
         val pageInfo = document.djvu.getPageInfo(pageIndex)
@@ -134,7 +132,6 @@ class DjvuConverter @Inject constructor() {
         pageInfo: DjvuLibre.Page,
         targetDpi: Int,
     ): Bitmap {
-        ensureRenderSupport()
         var dpi = targetDpi.coerceAtLeast(MIN_TARGET_DPI)
         while (true) {
             val sourceDpi = pageInfo.dpi.takeIf { it > 0 } ?: dpi
@@ -170,16 +167,6 @@ class DjvuConverter @Inject constructor() {
         private const val DEFAULT_TARGET_DPI = AppConstants.DEFAULT_DJVU_CONVERSION_DPI
         private const val MIN_TARGET_DPI = 120
         private const val DPI_FALLBACK_RATIO = 0.75f
-    }
-
-    private val renderSupportAvailable: Boolean by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        runCatching { System.loadLibrary("penguin") }.isSuccess
-    }
-
-    fun ensureRenderSupport() {
-        if (!renderSupportAvailable) {
-            throw UnsatisfiedLinkError("DjVu render library is missing")
-        }
     }
 }
 

@@ -27,8 +27,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CancellationException
@@ -61,7 +61,7 @@ class DjvuViewerViewModel @Inject constructor(
     private var decryptedFile: File? = null
     private var document: DjvuDocument? = null
     private val prefetchJobs = mutableMapOf<Int, Job>()
-    private val renderSemaphore = Semaphore(2)
+    private val renderMutex = Mutex()
     private val renderCache = object : LruCache<RenderKey, Bitmap>(CACHE_SIZE_KB) {
         override fun sizeOf(key: RenderKey, value: Bitmap): Int = value.byteCount / 1024
     }
@@ -151,15 +151,15 @@ class DjvuViewerViewModel @Inject constructor(
         val cached = synchronized(renderCache) { renderCache.get(key) }
         cached?.let { return it }
         return withContext(Dispatchers.Default) {
-            renderSemaphore.withPermit {
+            renderMutex.withLock {
                 coroutineContext.ensureActive()
                 val secondCached = synchronized(renderCache) { renderCache.get(key) }
-                secondCached?.let { return@withPermit it }
+                secondCached?.let { return@withLock it }
                 val handle = checkNotNull(document) { "DjVu document is not loaded" }
                 val bitmap = dependencies.djvuConverter.renderPage(handle, pageIndex, bucketWidthPx)
                 coroutineContext.ensureActive()
                 synchronized(renderCache) { renderCache.put(key, bitmap) }
-                return@withPermit bitmap
+                return@withLock bitmap
             }
         }
     }
@@ -207,7 +207,6 @@ class DjvuViewerViewModel @Inject constructor(
         val item = checkNotNull(dependencies.libraryRepository.getCatalogItem(itemId)) {
             "Document not found"
         }
-        dependencies.djvuConverter.ensureRenderSupport()
         val local = dependencies.libraryRepository.getLocalDocument(itemId)
         val encryptedFile = local?.encryptedFilePath?.let { File(it) }
             ?: dependencies.storage.encryptedFileFor(item.objectKey)
