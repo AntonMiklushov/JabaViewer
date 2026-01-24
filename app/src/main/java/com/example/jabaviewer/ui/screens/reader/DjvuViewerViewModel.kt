@@ -166,9 +166,14 @@ class DjvuViewerViewModel @Inject constructor(
 
     fun onRenderFailure(error: Throwable) {
         Log.e(TAG, "Failed to render DjVu page", error)
+        val message = if (error is UnsatisfiedLinkError) {
+            "DjVu viewer is not available on this device build."
+        } else {
+            "Failed to open DjVu file."
+        }
         _uiState.value = _uiState.value.copy(
             isLoading = false,
-            errorMessage = "Failed to open DjVu file.",
+            errorMessage = message,
         )
     }
 
@@ -202,6 +207,7 @@ class DjvuViewerViewModel @Inject constructor(
         val item = checkNotNull(dependencies.libraryRepository.getCatalogItem(itemId)) {
             "Document not found"
         }
+        dependencies.djvuConverter.ensureRenderSupport()
         val local = dependencies.libraryRepository.getLocalDocument(itemId)
         val encryptedFile = local?.encryptedFilePath?.let { File(it) }
             ?: dependencies.storage.encryptedFileFor(item.objectKey)
