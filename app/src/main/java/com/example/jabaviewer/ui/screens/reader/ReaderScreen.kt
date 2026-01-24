@@ -129,6 +129,7 @@ fun ReaderScreen(
             isPdfLoaded = isPdfLoaded,
             pdfError = pdfError,
             lastLoadKey = lastLoadKey,
+            blockTouches = !isPdfLoaded,
         )
         val callbacks = ReaderContentCallbacks(
             onPdfViewReady = { pdfViewRef = it },
@@ -298,6 +299,7 @@ private fun ReaderContent(
                         loadKey = model.loadKey,
                         currentPage = model.state.currentPage,
                         lastLoadKey = model.lastLoadKey,
+                        blockTouches = model.blockTouches,
                     ),
                     callbacks = callbacks,
                 )
@@ -344,6 +346,11 @@ private fun PdfViewContainer(
         },
         update = { pdfView ->
             callbacks.onPdfViewReady(pdfView)
+            if (config.blockTouches) {
+                pdfView.setOnTouchListener { _, _ -> true }
+            } else {
+                pdfView.setOnTouchListener(null)
+            }
             if (config.loadKey == config.lastLoadKey) return@AndroidView
             val file = File(config.loadKey.path)
             if (!file.exists()) {
@@ -518,6 +525,7 @@ private data class ReaderContentModel(
     val isPdfLoaded: Boolean,
     val pdfError: String?,
     val lastLoadKey: PdfLoadKey?,
+    val blockTouches: Boolean,
 )
 
 private data class ReaderContentCallbacks(
@@ -545,6 +553,7 @@ private data class PdfViewConfig(
     val loadKey: PdfLoadKey,
     val currentPage: Int,
     val lastLoadKey: PdfLoadKey?,
+    val blockTouches: Boolean,
 )
 
 private const val MAX_SLIDER_STEPS = 200
