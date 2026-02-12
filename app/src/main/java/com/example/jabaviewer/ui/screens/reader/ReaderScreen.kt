@@ -5,12 +5,10 @@ package com.example.jabaviewer.ui.screens.reader
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -25,7 +23,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -46,12 +43,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.jabaviewer.core.DocumentFormat
 import com.example.jabaviewer.data.settings.OrientationLock
 import com.example.jabaviewer.data.settings.ReaderMode
 import com.github.barteksc.pdfviewer.PDFView
@@ -64,7 +58,6 @@ import kotlin.math.roundToInt
 fun ReaderScreen(
     itemId: String,
     onBack: () -> Unit,
-    onOpenDjvu: () -> Unit,
     viewModel: ReaderViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -78,13 +71,6 @@ fun ReaderScreen(
 
     val loadKey = remember(state.decryptedFilePath, state.readerMode, state.nightMode) {
         state.decryptedFilePath?.let { PdfLoadKey(it, state.readerMode, state.nightMode) }
-    }
-    val saveDjvuLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument(DocumentFormat.DJVU.mimeType)
-    ) { uri ->
-        if (uri != null) {
-            viewModel.saveDjvuCopy(context.contentResolver, uri)
-        }
     }
 
     ReaderScreenEffects(
@@ -129,7 +115,6 @@ fun ReaderScreen(
             isPdfLoaded = isPdfLoaded,
             pdfError = pdfError,
             lastLoadKey = lastLoadKey,
-            blockTouches = !isPdfLoaded,
         )
         val callbacks = ReaderContentCallbacks(
             onPdfViewReady = { pdfViewRef = it },
@@ -141,23 +126,10 @@ fun ReaderScreen(
                 viewModel.updateCurrentPage(page)
             },
         )
-        val djvuModel = DjvuActionModel(
-            title = state.title.ifBlank { "DJVU document" },
-            errorMessage = state.djvuActionError,
-        )
-        val djvuCallbacks = DjvuActionCallbacks(
-            onConvert = viewModel::convertPendingDjvu,
-            onSave = { saveDjvuLauncher.launch(buildDjvuFileName(state.title)) },
-            onOpenExternal = { viewModel.openExternalDjvu(context) },
-            onViewDjvu = onOpenDjvu,
-            onCancel = onBack,
-        )
         ReaderContent(
             padding = padding,
             model = contentModel,
             callbacks = callbacks,
-            djvuModel = djvuModel,
-            djvuCallbacks = djvuCallbacks,
         )
     }
 
@@ -265,8 +237,6 @@ private fun ReaderContent(
     padding: PaddingValues,
     model: ReaderContentModel,
     callbacks: ReaderContentCallbacks,
-    djvuModel: DjvuActionModel,
-    djvuCallbacks: DjvuActionCallbacks,
 ) {
     Box(
         modifier = Modifier
@@ -275,12 +245,6 @@ private fun ReaderContent(
             .padding(padding)
     ) {
         when {
-            model.state.requiresDjvuAction -> {
-                DjvuActionDialog(
-                    model = djvuModel,
-                    callbacks = djvuCallbacks,
-                )
-            }
             model.state.isLoading -> {
                 LoadingIndicator(message = model.state.loadingMessage)
             }
@@ -299,7 +263,6 @@ private fun ReaderContent(
                         loadKey = model.loadKey,
                         currentPage = model.state.currentPage,
                         lastLoadKey = model.lastLoadKey,
-                        blockTouches = model.blockTouches,
                     ),
                     callbacks = callbacks,
                 )
@@ -346,11 +309,6 @@ private fun PdfViewContainer(
         },
         update = { pdfView ->
             callbacks.onPdfViewReady(pdfView)
-            if (config.blockTouches) {
-                pdfView.setOnTouchListener { _, _ -> true }
-            } else {
-                pdfView.setOnTouchListener(null)
-            }
             if (config.loadKey == config.lastLoadKey) return@AndroidView
             val file = File(config.loadKey.path)
             if (!file.exists()) {
@@ -468,51 +426,6 @@ private fun JumpToPageDialog(
     )
 }
 
-@Composable
-private fun DjvuActionDialog(
-    model: DjvuActionModel,
-    callbacks: DjvuActionCallbacks,
-) {
-    AlertDialog(
-        onDismissRequest = callbacks.onCancel,
-        title = { Text(model.title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = "View DjVu in-app or convert to PDF.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                model.errorMessage?.let { message ->
-                    Text(
-                        text = message,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-                OutlinedButton(onClick = callbacks.onConvert, modifier = Modifier.fillMaxWidth()) {
-                    Text("Convert to PDF")
-                }
-                OutlinedButton(onClick = callbacks.onViewDjvu, modifier = Modifier.fillMaxWidth()) {
-                    Text("View DjVu")
-                }
-                OutlinedButton(onClick = callbacks.onSave, modifier = Modifier.fillMaxWidth()) {
-                    Text("Decrypt & Save DJVU")
-                }
-                OutlinedButton(onClick = callbacks.onOpenExternal, modifier = Modifier.fillMaxWidth()) {
-                    Text("Open in External Viewer")
-                }
-            }
-        },
-        confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = callbacks.onCancel) {
-                    Text("Back")
-                }
-            }
-        },
-    )
-}
-
 private data class PdfLoadKey(
     val path: String,
     val readerMode: ReaderMode,
@@ -525,7 +438,6 @@ private data class ReaderContentModel(
     val isPdfLoaded: Boolean,
     val pdfError: String?,
     val lastLoadKey: PdfLoadKey?,
-    val blockTouches: Boolean,
 )
 
 private data class ReaderContentCallbacks(
@@ -536,35 +448,10 @@ private data class ReaderContentCallbacks(
     val onPageChange: (Int, Int) -> Unit,
 )
 
-private data class DjvuActionModel(
-    val title: String,
-    val errorMessage: String?,
-)
-
-private data class DjvuActionCallbacks(
-    val onConvert: () -> Unit,
-    val onSave: () -> Unit,
-    val onOpenExternal: () -> Unit,
-    val onViewDjvu: () -> Unit,
-    val onCancel: () -> Unit,
-)
-
 private data class PdfViewConfig(
     val loadKey: PdfLoadKey,
     val currentPage: Int,
     val lastLoadKey: PdfLoadKey?,
-    val blockTouches: Boolean,
 )
 
 private const val MAX_SLIDER_STEPS = 200
-
-private fun buildDjvuFileName(title: String): String {
-    val base = title.trim().ifBlank { "document" }
-    val sanitized = base.replace(Regex("[\\\\/:*?\"<>|]"), "_")
-    val lower = sanitized.lowercase()
-    return if (lower.endsWith(".djvu") || lower.endsWith(".djv")) {
-        sanitized
-    } else {
-        "$sanitized.djvu"
-    }
-}

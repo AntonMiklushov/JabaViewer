@@ -91,7 +91,6 @@ private fun NavGraphBuilder.readerRoute(navController: NavHostController) {
         ReaderScreen(
             itemId = itemId,
             onBack = { navController.popBackStack() },
-            onOpenDjvu = { navController.navigate(Routes.djvuViewer(itemId)) },
         )
     }
 }
