@@ -7,20 +7,21 @@ import android.content.ClipData
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
-import androidx.compose.foundation.border
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -43,30 +44,31 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.jabaviewer.BuildConfig
-import com.example.jabaviewer.data.djvu.DjvuRect
-import com.example.jabaviewer.data.djvu.DjvuRenderDebugInfo
 import com.example.jabaviewer.data.settings.OrientationLock
 import com.example.jabaviewer.data.settings.ReaderMode
 import kotlinx.coroutines.CancellationException
@@ -74,7 +76,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import java.io.File
-import java.util.Locale
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -92,6 +93,7 @@ fun DjvuViewerScreen(
     val view = LocalView.current
     var didScrollToInitial by remember { mutableStateOf(false) }
     var debugBucketWidthPx by remember { mutableIntStateOf(1) }
+    val zoomStates = remember(itemId) { mutableStateMapOf<Int, DjvuPageZoomState>() }
 
     DjvuViewerEffects(
         input = DjvuViewerEffectInput(
@@ -145,6 +147,7 @@ fun DjvuViewerScreen(
             listState = listState,
             viewModel = viewModel,
             onBucketWidthUpdated = { debugBucketWidthPx = it },
+            pageZoomStates = zoomStates,
         )
     }
 }
@@ -207,13 +210,14 @@ private fun DjvuViewerEffects(
 }
 
 @Composable
-@Suppress("LongMethod")
+@Suppress("LongMethod", "LongParameterList")
 private fun DjvuViewerContent(
     padding: PaddingValues,
     state: DjvuViewerUiState,
     listState: LazyListState,
     viewModel: DjvuViewerViewModel,
     onBucketWidthUpdated: (Int) -> Unit,
+    pageZoomStates: MutableMap<Int, DjvuPageZoomState>,
 ) {
     BoxWithConstraints(
         modifier = Modifier
@@ -254,22 +258,14 @@ private fun DjvuViewerContent(
                         listState = listState,
                         bucketWidthPx = bucketWidthPx,
                         viewModel = viewModel,
+                        pageZoomStates = pageZoomStates,
                     )
                     ReaderMode.CONTINUOUS -> DjvuContinuousList(
                         state = state,
                         listState = listState,
                         bucketWidthPx = bucketWidthPx,
                         viewModel = viewModel,
-                    )
-                }
-                if (BuildConfig.DEBUG && !state.debugLastDumpPath.isNullOrBlank()) {
-                    Text(
-                        text = "Debug bitmap: ${state.debugLastDumpPath}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(8.dp),
+                        pageZoomStates = pageZoomStates,
                     )
                 }
             }
@@ -292,6 +288,7 @@ private fun DjvuContinuousList(
     listState: LazyListState,
     bucketWidthPx: Int,
     viewModel: DjvuViewerViewModel,
+    pageZoomStates: MutableMap<Int, DjvuPageZoomState>,
 ) {
     LazyColumn(
         state = listState,
@@ -305,20 +302,28 @@ private fun DjvuContinuousList(
                 pageRatio = ratio,
                 bucketWidthPx = bucketWidthPx,
                 viewModel = viewModel,
-                debugInfo = state.debugRenderInfoByPage[pageIndex],
+                zoomState = pageZoomStates[pageIndex] ?: DjvuPageZoomState.DEFAULT,
+                onZoomStateChanged = { next ->
+                    if (next.isDefault()) {
+                        pageZoomStates.remove(pageIndex)
+                    } else {
+                        pageZoomStates[pageIndex] = next
+                    }
+                },
             )
         }
     }
 }
 
 @Composable
-@Suppress("LongMethod", "CyclomaticComplexMethod")
+@Suppress("LongMethod", "CyclomaticComplexMethod", "LongParameterList")
 private fun DjvuPageItem(
     pageIndex: Int,
     pageRatio: Float,
     bucketWidthPx: Int,
     viewModel: DjvuViewerViewModel,
-    debugInfo: DjvuRenderDebugInfo?,
+    zoomState: DjvuPageZoomState,
+    onZoomStateChanged: (DjvuPageZoomState) -> Unit,
 ) {
     val density = LocalDensity.current
     val targetWidthPx = bucketWidthPx.coerceAtLeast(1)
@@ -349,14 +354,7 @@ private fun DjvuPageItem(
             .height(pageHeightDp)
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .onSizeChanged { size -> containerSize = size }
-            .then(
-                if (BuildConfig.DEBUG) {
-                    Modifier.border(width = 1.dp, color = Color.Red)
-                } else {
-                    Modifier
-                }
-            ),
+            .onSizeChanged { size -> containerSize = size },
         contentAlignment = Alignment.Center,
     ) {
         val bitmap = bitmapState.value
@@ -367,91 +365,102 @@ private fun DjvuPageItem(
                 containerSize = containerSize,
                 bitmap = bitmap,
             )
+            val clampedZoomState = clampZoomState(
+                state = zoomState,
+                containerSize = containerSize,
+                presentation = presentation,
+            )
+            if (clampedZoomState != zoomState) {
+                onZoomStateChanged(clampedZoomState)
+            }
+            val currentZoomState by rememberUpdatedState(clampedZoomState)
+            val currentContainerSize by rememberUpdatedState(containerSize)
+            val currentPresentation by rememberUpdatedState(presentation)
+            val zoomStateCallback by rememberUpdatedState(onZoomStateChanged)
+            val panModifier = if (clampedZoomState.scale > DEFAULT_ZOOM_SCALE + ZOOM_EPSILON) {
+                Modifier.pointerInput(pageIndex) {
+                    detectDragGestures { change, dragAmount ->
+                        val baseState = currentZoomState
+                        val next = clampZoomState(
+                            state = baseState.copy(
+                                offsetX = baseState.offsetX + dragAmount.x,
+                                offsetY = baseState.offsetY + dragAmount.y,
+                            ),
+                            containerSize = currentContainerSize,
+                            presentation = currentPresentation,
+                        )
+                        change.consume()
+                        zoomStateCallback(next)
+                    }
+                }
+            } else {
+                Modifier
+            }
+            val zoomModifier = Modifier
+                .fillMaxSize()
+                .pointerInput(pageIndex) {
+                    awaitEachGesture {
+                        var stillPressed: Boolean
+                        do {
+                            val event = awaitPointerEvent()
+                            if (event.changes.count { it.pressed } > 1) {
+                                val baseState = currentZoomState
+                                val next = clampZoomState(
+                                    state = baseState.copy(
+                                        scale = baseState.scale * event.calculateZoom(),
+                                        offsetX = baseState.offsetX + event.calculatePan().x,
+                                        offsetY = baseState.offsetY + event.calculatePan().y,
+                                    ),
+                                    containerSize = currentContainerSize,
+                                    presentation = currentPresentation,
+                                )
+                                event.changes.forEach { pointer ->
+                                    if (pointer.positionChanged()) {
+                                        pointer.consume()
+                                    }
+                                }
+                                zoomStateCallback(next)
+                            }
+                            stillPressed = event.changes.any { it.pressed }
+                        } while (stillPressed)
+                    }
+                }
+                .then(panModifier)
+                .pointerInput(pageIndex) {
+                    detectTapGestures(
+                        onDoubleTap = { tapOffset ->
+                            val baseState = currentZoomState
+                            val next = if (baseState.scale > DEFAULT_ZOOM_SCALE + ZOOM_EPSILON) {
+                                DjvuPageZoomState.DEFAULT
+                            } else {
+                                val centerX = currentContainerSize.width / 2f
+                                val centerY = currentContainerSize.height / 2f
+                                clampZoomState(
+                                    state = DjvuPageZoomState(
+                                        scale = DOUBLE_TAP_ZOOM_SCALE,
+                                        offsetX = centerX - tapOffset.x,
+                                        offsetY = centerY - tapOffset.y,
+                                    ),
+                                    containerSize = currentContainerSize,
+                                    presentation = currentPresentation,
+                                )
+                            }
+                            zoomStateCallback(next)
+                        },
+                    )
+                }
             Image(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = "Page ${pageIndex + 1}",
                 contentScale = ContentScale.Fit,
                 alignment = Alignment.Center,
-                modifier = Modifier.fillMaxSize(),
+                modifier = zoomModifier.graphicsLayer(
+                    scaleX = clampedZoomState.scale,
+                    scaleY = clampedZoomState.scale,
+                    translationX = clampedZoomState.offsetX,
+                    translationY = clampedZoomState.offsetY,
+                ),
             )
-            if (BuildConfig.DEBUG && presentation != null) {
-                val debugWidthDp = with(density) { presentation.imageWidthPx.toDp() }
-                val debugHeightDp = with(density) { presentation.imageHeightPx.toDp() }
-                Box(
-                    modifier = Modifier
-                        .offset {
-                            IntOffset(
-                                x = presentation.translateXPx.roundToInt(),
-                                y = presentation.translateYPx.roundToInt(),
-                            )
-                        }
-                        .size(debugWidthDp, debugHeightDp)
-                        .border(width = 1.dp, color = Color.Cyan),
-                )
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp)
-                        .background(Color(0xAA000000), RoundedCornerShape(6.dp))
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        text = "p=${pageIndex + 1} cw=${containerSize.width} ch=${containerSize.height}",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    Text(
-                        text = "bw=${bitmap.width} bh=${bitmap.height} " +
-                            "s=${String.format(Locale.US, "%.4f", presentation.scale)}",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    Text(
-                        text = "tx=${String.format(Locale.US, "%.1f", presentation.translateXPx)} " +
-                            "ty=${String.format(Locale.US, "%.1f", presentation.translateYPx)}",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    Text(
-                        text = "rot=${debugInfo?.rotationDegrees ?: 0} dpi=${debugInfo?.sourceDpi ?: -1}",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    Text(
-                        text = "src=${debugInfo?.sourceRect?.toDebugString() ?: "-"}",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    Text(
-                        text = "dst=${debugInfo?.destRect?.toDebugString() ?: "-"}",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    Text(
-                        text = "tgt=${debugInfo?.targetRect?.toDebugString() ?: "-"}",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    Text(
-                        text = "mode=${debugInfo?.renderMode ?: "-"} " +
-                            "ns=${debugInfo?.nativeScale?.toDebugFloat() ?: "-"} " +
-                            "ds=${debugInfo?.desiredScale?.toDebugFloat() ?: "-"}",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
-            }
-            if (BuildConfig.DEBUG && debugInfo != null) {
-                Text(
-                    text = "render ${debugInfo.outputWidthPx}x${debugInfo.outputHeightPx}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(6.dp),
-                )
-            }
         }
     }
 }
@@ -512,6 +521,26 @@ private data class PresentationDebug(
     val imageHeightPx: Float,
 )
 
+private data class DjvuPageZoomState(
+    val scale: Float,
+    val offsetX: Float,
+    val offsetY: Float,
+) {
+    fun isDefault(): Boolean {
+        return scale <= DEFAULT_ZOOM_SCALE + ZOOM_EPSILON &&
+            kotlin.math.abs(offsetX) <= ZOOM_EPSILON &&
+            kotlin.math.abs(offsetY) <= ZOOM_EPSILON
+    }
+
+    companion object {
+        val DEFAULT = DjvuPageZoomState(
+            scale = DEFAULT_ZOOM_SCALE,
+            offsetX = 0f,
+            offsetY = 0f,
+        )
+    }
+}
+
 @Suppress("ReturnCount")
 private fun computePresentationDebug(
     containerSize: IntSize,
@@ -535,11 +564,29 @@ private fun computePresentationDebug(
     )
 }
 
-private fun DjvuRect.toDebugString(): String {
-    return "($left,$top $width x $height)"
+@Suppress("ReturnCount")
+private fun clampZoomState(
+    state: DjvuPageZoomState,
+    containerSize: IntSize,
+    presentation: PresentationDebug?,
+): DjvuPageZoomState {
+    if (containerSize.width <= 0 || containerSize.height <= 0 || presentation == null) {
+        return DjvuPageZoomState.DEFAULT
+    }
+    val clampedScale = state.scale.coerceIn(DEFAULT_ZOOM_SCALE, MAX_ZOOM_SCALE)
+    if (clampedScale <= DEFAULT_ZOOM_SCALE + ZOOM_EPSILON) {
+        return DjvuPageZoomState.DEFAULT
+    }
+    val scaledWidthPx = presentation.imageWidthPx * clampedScale
+    val scaledHeightPx = presentation.imageHeightPx * clampedScale
+    val maxOffsetX = ((scaledWidthPx - containerSize.width) / 2f).coerceAtLeast(0f)
+    val maxOffsetY = ((scaledHeightPx - containerSize.height) / 2f).coerceAtLeast(0f)
+    return DjvuPageZoomState(
+        scale = clampedScale,
+        offsetX = state.offsetX.coerceIn(-maxOffsetX, maxOffsetX),
+        offsetY = state.offsetY.coerceIn(-maxOffsetY, maxOffsetY),
+    )
 }
-
-private fun Float.toDebugFloat(): String = String.format(Locale.US, "%.4f", this)
 
 private fun shareDebugBitmap(
     context: android.content.Context,
@@ -566,3 +613,7 @@ private fun shareDebugBitmap(
 
 private val LIST_HORIZONTAL_PADDING = 16.dp
 private const val DEFAULT_PAGE_RATIO = 1.4f
+private const val DEFAULT_ZOOM_SCALE = 1f
+private const val DOUBLE_TAP_ZOOM_SCALE = 2f
+private const val MAX_ZOOM_SCALE = 5f
+private const val ZOOM_EPSILON = 0.01f
